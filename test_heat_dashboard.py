@@ -104,14 +104,17 @@ class GuidanceTests(unittest.TestCase):
             with self.subTest(risk=risk):
                 guidance = get_risk_guidance(risk)
 
-                self.assertEqual(guidance, RISK_GUIDANCE[risk])
+                expected = RISK_GUIDANCE[risk].copy()
+                expected["context_notes"] = []
+                self.assertEqual(guidance, expected)
                 self.assertTrue(guidance["rest_time"])
                 self.assertTrue(guidance["action_text"])
+                self.assertTrue(guidance["action_items"])
                 self.assertTrue(guidance["water_text"])
                 self.assertTrue(guidance["control_text"])
                 self.assertTrue(guidance["tone"])
 
-    def test_guidance_adds_context_from_margin_workload_acclimatization_and_limit(self):
+    def test_guidance_keeps_context_notes_separate_from_response_items(self):
         guidance = get_risk_guidance(
             risk="위험",
             margin=-1.5,
@@ -120,10 +123,14 @@ class GuidanceTests(unittest.TestCase):
             limit_type="RAL",
         )
 
-        self.assertIn("기준 WBGT를 1.5℃ 초과", guidance["action_text"])
-        self.assertIn("고강도 작업", guidance["action_text"])
-        self.assertIn("비순화 작업자", guidance["action_text"])
-        self.assertIn("NIOSH RAL", guidance["action_text"])
+        self.assertIn("기준 WBGT를 1.5℃ 초과", guidance["context_notes"])
+        self.assertIn(
+            "고강도 작업이므로 작업 속도 저감, 인원 교대, 기계화 보조를 우선 검토",
+            guidance["context_notes"],
+        )
+        self.assertIn("비순화 작업자이므로 더 긴 휴식과 단계적 노출 적용", guidance["context_notes"])
+        self.assertIn("적용 기준: NIOSH RAL", guidance["context_notes"])
+        self.assertNotIn("NIOSH RAL", " ".join(guidance["action_items"]))
 
     def test_unknown_risk_label_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "알 수 없는"):

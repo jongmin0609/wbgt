@@ -46,6 +46,49 @@ def metric_card(label, value, unit, tone="neutral"):
     )
 
 
+def action_checklist(items):
+    return (
+        '<ul class="action-list">'
+        + "".join(
+            f"<li><span>□</span><strong>{escape(item)}</strong></li>"
+            for item in items
+        )
+        + "</ul>"
+    )
+
+
+def detail_disclosure(values):
+    acclimatization = values["acclimatization"]
+    rows = [
+        ("VO2 추정값", f"{values['vo2']:.2f} ml/kg/min"),
+        ("칼로리 소모량", f"{values['kcal']:.2f} kcal/min"),
+        ("대사율", f"{values['metabolic_watts']:.0f} W"),
+        (
+            f"NIOSH {values['limit_type']} 기준 WBGT",
+            f"{values['limit_wbgt']:.1f}℃",
+        ),
+        ("기준 여유", f"{values['margin']:.1f}℃"),
+        (
+            "순화 판정",
+            f"{acclimatization['status_label']} / {values['limit_type']}",
+        ),
+        (
+            "입력 프로필",
+            f"{values['age']}세 / {values['weight']:g}kg / {sex_label(values['sex'])}",
+        ),
+    ]
+    row_markup = "".join(
+        f'<div class="detail-row"><span>{escape(label)}</span><strong>{escape(value)}</strong></div>'
+        for label, value in rows
+    )
+    return (
+        '<details class="detail-disclosure" data-testid="calculation-details">'
+        "<summary>상세 데이터 확인</summary>"
+        f'<section class="detail-list">{row_markup}</section>'
+        "</details>"
+    )
+
+
 def apply_styles():
     st.markdown(
         """
@@ -56,11 +99,16 @@ def apply_styles():
                 --line: #d7dee7;
                 --surface: #ffffff;
                 --canvas: #f4f7f9;
+                --safe: #137a45;
+                --caution: #b7791f;
+                --danger: #c2410c;
+                --severe: #b42318;
+                --stop: #7a271a;
             }
             .stApp { background: var(--canvas); color: var(--ink); }
             .block-container {
-                max-width: 860px;
-                padding-top: 1.5rem;
+                max-width: 760px;
+                padding-top: 1rem;
                 padding-bottom: 2.2rem;
             }
             [data-testid="stHeader"] { background: transparent; }
@@ -131,10 +179,11 @@ def apply_styles():
             .risk-panel {
                 background: var(--surface);
                 border: 1px solid var(--line);
-                border-left-width: 8px;
+                border-top-width: 8px;
                 border-radius: 8px;
-                margin: 0.7rem 0 0.9rem;
-                padding: 1rem;
+                box-shadow: 0 10px 24px rgba(16, 24, 40, 0.05);
+                margin: 0.2rem 0 0.8rem;
+                padding: 1.05rem;
             }
             .risk-panel p {
                 color: var(--muted);
@@ -186,15 +235,54 @@ def apply_styles():
                 padding: 0.35rem 0.58rem;
             }
             .risk-safe { border-left-color: #137a45; }
+            .risk-safe { border-top-color: var(--safe); }
             .risk-safe .risk-badge { background: #e7f6ed; color: #137a45; }
             .risk-caution { border-left-color: #9b6400; }
+            .risk-caution { border-top-color: var(--caution); }
             .risk-caution .risk-badge { background: #fff2d8; color: #8b5800; }
             .risk-danger { border-left-color: #c2410c; }
+            .risk-danger { border-top-color: var(--danger); }
             .risk-danger .risk-badge { background: #ffe7db; color: #b53b0b; }
             .risk-severe { border-left-color: #b42318; }
+            .risk-severe { border-top-color: var(--severe); }
             .risk-severe .risk-badge { background: #fee4e2; color: #b42318; }
             .risk-stop { border-left-color: #7a271a; }
+            .risk-stop { border-top-color: var(--stop); }
             .risk-stop .risk-badge { background: #fecdca; color: #7a271a; }
+            .risk-safe .risk-title h2 { color: var(--safe); }
+            .risk-caution .risk-title h2 { color: var(--caution); }
+            .risk-danger .risk-title h2 { color: var(--danger); }
+            .risk-severe .risk-title h2 { color: var(--severe); }
+            .risk-stop .risk-title h2 { color: var(--stop); }
+            .action-heading {
+                color: var(--muted);
+                font-size: 0.88rem;
+                font-weight: 700;
+                margin: 0.8rem 0 0.45rem;
+            }
+            .action-list {
+                display: grid;
+                gap: 0.42rem;
+                list-style: none;
+                margin: 0;
+                padding: 0;
+            }
+            .action-list li {
+                align-items: flex-start;
+                display: flex;
+                gap: 0.5rem;
+                line-height: 1.45;
+            }
+            .action-list li span {
+                color: var(--muted);
+                flex: 0 0 auto;
+                font-weight: 700;
+            }
+            .action-list li strong {
+                color: var(--ink);
+                display: inline;
+                font-size: 1rem;
+            }
             .metric-grid, .detail-grid {
                 display: grid;
                 gap: 0.72rem;
@@ -223,11 +311,58 @@ def apply_styles():
             }
             .metric-heart strong { color: #b42318; }
             .metric-wbgt strong { color: #006d77; }
+            .metric-workload strong { color: var(--ink); }
             .detail-card { min-height: 104px; padding: 0.9rem; }
             .detail-card strong {
                 color: var(--ink);
                 display: block;
                 font-size: 1.18rem;
+                line-height: 1.35;
+                overflow-wrap: anywhere;
+            }
+            .detail-disclosure {
+                background: var(--surface);
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                margin: 0.2rem 0 0.95rem;
+                overflow: hidden;
+            }
+            .detail-disclosure summary {
+                color: var(--ink);
+                cursor: pointer;
+                font-size: 1rem;
+                font-weight: 800;
+                list-style: none;
+                padding: 1rem;
+            }
+            .detail-disclosure summary::-webkit-details-marker { display: none; }
+            .detail-disclosure summary::after {
+                content: "▼";
+                float: right;
+                font-size: 0.8rem;
+                margin-top: 0.12rem;
+            }
+            .detail-disclosure[open] summary::after { content: "▲"; }
+            .detail-list {
+                border-top: 1px solid var(--line);
+                display: grid;
+                gap: 0.05rem;
+                padding: 0.85rem 1rem 1rem;
+            }
+            .detail-row {
+                align-items: baseline;
+                display: grid;
+                gap: 0.35rem;
+                grid-template-columns: minmax(7.5rem, 0.9fr) minmax(0, 1.1fr);
+                padding: 0.42rem 0;
+            }
+            .detail-row span {
+                color: var(--muted);
+                font-size: 0.95rem;
+            }
+            .detail-row strong {
+                color: var(--ink);
+                font-size: 1rem;
                 line-height: 1.35;
                 overflow-wrap: anywhere;
             }
@@ -253,6 +388,8 @@ def apply_styles():
                 .metric-grid { grid-template-columns: 1fr; }
                 .detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
                 .metric-card { min-height: 96px; }
+                .metric-card strong { font-size: 1.65rem; }
+                .detail-row { grid-template-columns: 1fr; }
             }
         </style>
         """,
@@ -271,37 +408,36 @@ def render_device_alert_controls(risk, manager_alert, heart_rate, wbgt, updated_
     }
     payload_json = json.dumps(payload, ensure_ascii=False)
 
-    components.html(
-        f"""
+    html = """
         <div id="alert-root"></div>
         <script>
-        const payload = {payload_json};
+        const payload = __PAYLOAD__;
         const root = document.getElementById("alert-root");
         const enabledKey = "wgbt-device-alert-enabled";
         const lastAlertKey = "wgbt-last-alert-key";
 
-        function readStorage(key) {{
-            try {{ return window.localStorage.getItem(key); }}
-            catch (_) {{ return null; }}
-        }}
+        function readStorage(key) {
+            try { return window.localStorage.getItem(key); }
+            catch (_) { return null; }
+        }
 
-        function writeStorage(key, value) {{
-            try {{ window.localStorage.setItem(key, value); }}
-            catch (_) {{}}
-        }}
+        function writeStorage(key, value) {
+            try { window.localStorage.setItem(key, value); }
+            catch (_) {}
+        }
 
-        function notificationsSupported() {{
+        function notificationsSupported() {
             return "Notification" in window && window.isSecureContext;
-        }}
+        }
 
-        function vibrate(pattern) {{
-            if ("vibrate" in navigator) {{
-                try {{ navigator.vibrate(pattern); }} catch (_) {{}}
-            }}
-        }}
+        function vibrate(pattern) {
+            if ("vibrate" in navigator) {
+                try { navigator.vibrate(pattern); } catch (_) {}
+            }
+        }
 
-        function playAlertSound() {{
-            try {{
+        function playAlertSound() {
+            try {
                 const AudioContext = window.AudioContext || window.webkitAudioContext;
                 if (!AudioContext) return;
                 const context = new AudioContext();
@@ -310,40 +446,46 @@ def render_device_alert_controls(risk, manager_alert, heart_rate, wbgt, updated_
                 gain.gain.exponentialRampToValueAtTime(0.22, context.currentTime + 0.03);
                 gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.95);
                 gain.connect(context.destination);
-                [0, 0.28, 0.56].forEach((offset) => {{
+                [0, 0.28, 0.56].forEach((offset) => {
                     const oscillator = context.createOscillator();
                     oscillator.type = "sine";
                     oscillator.frequency.setValueAtTime(880, context.currentTime + offset);
                     oscillator.connect(gain);
                     oscillator.start(context.currentTime + offset);
                     oscillator.stop(context.currentTime + offset + 0.18);
-                }});
-            }} catch (_) {{}}
-        }}
+                });
+            } catch (_) {}
+        }
 
-        function sendBrowserNotification() {{
+        function sendBrowserNotification() {
             if (!notificationsSupported() || Notification.permission !== "granted") return;
-            try {{
-                new Notification("온열 위험도 알람", {{
-                    body: `${{payload.risk}} 단계입니다. 심박수 ${{payload.heartRate}} bpm, WBGT ${{Number(payload.wbgt).toFixed(1)}}`,
+            try {
+                new Notification("온열 위험도 알림", {
+                    body: payload.risk + " 단계입니다. 심박수 " + payload.heartRate + " bpm, WBGT " + Number(payload.wbgt).toFixed(1),
                     tag: "wgbt-risk-alert",
                     renotify: true,
-                }});
-            }} catch (_) {{}}
-        }}
+                });
+            } catch (_) {}
+        }
 
-        async function enableAlerts() {{
+        async function turnOnAlerts() {
             writeStorage(enabledKey, "true");
-            if (notificationsSupported() && Notification.permission === "default") {{
-                try {{ await Notification.requestPermission(); }} catch (_) {{}}
-            }}
+            if (notificationsSupported() && Notification.permission === "default") {
+                try { await Notification.requestPermission(); } catch (_) {}
+            }
             vibrate([80]);
             playAlertSound();
             render();
             maybeTriggerAlert(true);
-        }}
+        }
 
-        function maybeTriggerAlert(force=false) {{
+        function turnOffAlerts() {
+            writeStorage(enabledKey, "false");
+            vibrate([60]);
+            render();
+        }
+
+        function maybeTriggerAlert(force=false) {
             const enabled = readStorage(enabledKey) === "true";
             if (!payload.managerAlert || !enabled) return;
             const previousKey = readStorage(lastAlertKey);
@@ -352,72 +494,56 @@ def render_device_alert_controls(risk, manager_alert, heart_rate, wbgt, updated_
             vibrate([450, 160, 450, 160, 450]);
             playAlertSound();
             sendBrowserNotification();
-        }}
+        }
 
-        function statusText() {{
-            const enabled = readStorage(enabledKey) === "true";
-            if (!enabled) return "알림을 받으려면 휴대폰에서 한 번 활성화하세요.";
-            if (!notificationsSupported()) return "소리와 진동 알림 활성화됨 · OS 푸시는 HTTPS에서만 가능";
-            if (Notification.permission === "granted") return "브라우저 알림, 소리, 진동 활성화됨";
-            if (Notification.permission === "denied") return "브라우저 알림 차단됨 · 소리와 진동만 시도";
-            return "소리와 진동 활성화됨 · 브라우저 알림 권한 대기";
-        }}
+        function bellSvg(enabled) {
+            const slash = enabled ? "" : '<line x1="4" y1="20" x2="20" y2="4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>';
+            return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 17H9m9-2v-5a6 6 0 0 0-12 0v5l-2 2h16l-2-2ZM10 21h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' + slash + '</svg>';
+        }
 
-        function render() {{
+        function render() {
             const enabled = readStorage(enabledKey) === "true";
-            const riskMessage = payload.managerAlert
-                ? `${{payload.risk}} 단계 감지됨`
-                : "위험 이상 단계가 아니면 알림을 울리지 않습니다.";
+            const label = enabled ? "휴대폰 알림 끄기" : "휴대폰 알림 켜기";
             root.innerHTML = `
                 <style>
-                    body {{ margin: 0; font-family: sans-serif; }}
-                    .device-alert {{
-                        background: ${{payload.managerAlert ? "#fff1f0" : "#ffffff"}};
-                        border: 1px solid ${{payload.managerAlert ? "#b42318" : "#d7dee7"}};
-                        border-radius: 8px;
-                        box-sizing: border-box;
-                        color: #101828;
-                        padding: 12px 14px;
-                    }}
-                    .device-alert p {{ color: #526070; font-size: 13px; margin: 0 0 8px; }}
-                    .device-alert strong {{
-                        color: ${{payload.managerAlert ? "#7a271a" : "#101828"}};
-                        display: block;
-                        font-size: 15px;
-                        line-height: 1.4;
-                        margin-bottom: 10px;
-                    }}
-                    .device-alert button {{
-                        background: #101828;
-                        border: 0;
-                        border-radius: 6px;
-                        color: white;
+                    body { margin: 0; font-family: sans-serif; }
+                    .alert-toggle {
+                        align-items: center;
+                        background: ${enabled ? "#101828" : "#ffffff"};
+                        border: 1px solid ${enabled ? "#101828" : "#d7dee7"};
+                        border-radius: 999px;
+                        color: ${enabled ? "#ffffff" : "#526070"};
                         cursor: pointer;
-                        font-size: 14px;
-                        font-weight: 700;
-                        min-height: 40px;
-                        padding: 0 14px;
-                        width: 100%;
-                    }}
-                    .device-alert button.enabled {{ background: #137a45; }}
+                        display: inline-flex;
+                        height: 42px;
+                        justify-content: center;
+                        margin: 0;
+                        width: 42px;
+                    }
+                    .alert-toggle svg {
+                        height: 21px;
+                        width: 21px;
+                    }
+                    .alert-toggle:focus-visible {
+                        outline: 3px solid rgba(16, 24, 40, 0.18);
+                        outline-offset: 2px;
+                    }
                 </style>
-                <section class="device-alert" aria-live="polite">
-                    <p>휴대폰 알림 상태</p>
-                    <strong>${{riskMessage}} · ${{statusText()}}</strong>
-                    <button id="enable-alerts" class="${{enabled ? "enabled" : ""}}">
-                        ${{enabled ? "알림 활성화됨" : "알림 활성화"}}
-                    </button>
-                </section>
+                <button id="alert-toggle" class="alert-toggle" type="button" aria-label="${label}" title="${label}">
+                    ${bellSvg(enabled)}
+                </button>
             `;
-            document.getElementById("enable-alerts").addEventListener("click", enableAlerts);
-        }}
+            document.getElementById("alert-toggle").addEventListener("click", () => {
+                if (readStorage(enabledKey) === "true") turnOffAlerts();
+                else turnOnAlerts();
+            });
+        }
 
         render();
         maybeTriggerAlert(false);
         </script>
-        """,
-        height=132,
-    )
+    """
+    components.html(html.replace("__PAYLOAD__", payload_json), height=48)
 
 
 def measurement_status(measurement):
@@ -499,21 +625,9 @@ def calculate_dashboard_values(measurement):
 
 
 def render_dashboard():
-    st.markdown(
-        """
-        <header class="page-head">
-            <p>현장 관리자 대시보드</p>
-            <h1>온열 위험도</h1>
-            <span>PC 입력 탭에서 보낸 단일 작업자 값으로 위험 단계와 휴식 권고를 확인합니다.</span>
-        </header>
-        """,
-        unsafe_allow_html=True,
-    )
-
     @st.experimental_fragment(run_every=2)
     def render_live_dashboard():
         measurement = read_measurement()
-        status_title, status_detail = measurement_status(measurement)
 
         try:
             values = calculate_dashboard_values(measurement)
@@ -529,109 +643,23 @@ def render_dashboard():
             updated_at=measurement.get("updated_at"),
         )
 
-        alert_markup = ""
-        if values["manager_alert"]:
-            alert_markup = f"""
-            <section class="manager-alert" data-testid="manager-alert" role="alert" aria-live="assertive">
-                <p>작업관리자 알람</p>
-                <strong>{escape(values["risk"])} 단계입니다. 즉시 작업자 상태를 확인하고 휴식 조치를 지시하세요.</strong>
-            </section>
-            """
-
         guidance = values["guidance"]
-        acclimatization = values["acclimatization"]
-        alert_message = "관리자 확인 필요" if values["manager_alert"] else "일반 모니터링"
-
         st.markdown(
             f"""
-            <section class="feed-status" data-testid="feed-status">
-                <strong>{escape(status_title)}</strong>
-                <span>{escape(status_detail)}</span>
-            </section>
-            {alert_markup}
             <section class="risk-panel risk-{escape(guidance["tone"])}" data-testid="risk-panel">
                 <p>현재 위험도 단계</p>
                 <div class="risk-title">
                     <h2>{escape(values["risk"])}</h2>
-                    <span class="risk-badge">{escape(values["limit_type"])} 기준</span>
                 </div>
-                <div class="risk-rest">
-                    <p>권장 휴식 시간</p>
-                    <span>{escape(guidance["rest_time"])}</span>
-                </div>
-                <strong>{escape(guidance["action_text"])}</strong>
+                <p class="action-heading">권장 대처</p>
+                {action_checklist(guidance["action_items"])}
             </section>
             <section class="metric-grid" data-testid="primary-metrics">
                 {metric_card("현재 심박수", values["heart_rate"], "bpm", "heart")}
                 {metric_card("온열지수 (WBGT)", f"{values["wbgt"]:.1f}", "WBGT", "wbgt")}
-                {metric_card("권장 휴식 시간", guidance["rest_time"], "참고 권고")}
+                {metric_card("작업강도", values["workload"], "대사율 기준", "workload")}
             </section>
-            <section class="detail-grid" data-testid="calculation-details">
-                <article class="detail-card">
-                    <p>알림 상태</p>
-                    <strong>{escape(alert_message)}</strong>
-                </article>
-                <article class="detail-card">
-                    <p>작업강도</p>
-                    <strong>{escape(values["workload"])}</strong>
-                </article>
-                <article class="detail-card">
-                    <p>VO2 추정값</p>
-                    <strong>{values["vo2"]:.2f} ml/kg/min</strong>
-                </article>
-                <article class="detail-card">
-                    <p>Keytel 기반 칼로리 소모량</p>
-                    <strong>{values["kcal"]:.2f} kcal/min</strong>
-                </article>
-                <article class="detail-card">
-                    <p>대사율</p>
-                    <strong>{values["metabolic_watts"]:.0f} W</strong>
-                </article>
-                <article class="detail-card">
-                    <p>NIOSH {escape(values["limit_type"])} 기준 WBGT</p>
-                    <strong>{values["limit_wbgt"]:.1f} ℃</strong>
-                </article>
-                <article class="detail-card">
-                    <p>기준 여유</p>
-                    <strong>{values["margin"]:.1f} ℃</strong>
-                </article>
-                <article class="detail-card">
-                    <p>입력 프로필</p>
-                    <strong>{values["age"]}세 / {values["weight"]:g}kg / {sex_label(values["sex"])}</strong>
-                </article>
-                <article class="detail-card">
-                    <p>순화 판정</p>
-                    <strong>{escape(acclimatization["status_label"])} / {escape(values["limit_type"])}</strong>
-                </article>
-                <article class="detail-card">
-                    <p>판정 근거</p>
-                    <strong>{escape(acclimatization["summary"])}</strong>
-                </article>
-                <article class="detail-card">
-                    <p>적용 조건</p>
-                    <strong>{escape(acclimatization["status_label"])} / 보정 WBGT {values["adjusted_wbgt"]:.1f}℃</strong>
-                </article>
-                <article class="detail-card">
-                    <p>권장 휴식</p>
-                    <strong>{escape(guidance["rest_time"])}</strong>
-                </article>
-                <article class="detail-card">
-                    <p>권장 행동</p>
-                    <strong>{escape(guidance["action_text"])}</strong>
-                </article>
-                <article class="detail-card">
-                    <p>수분 섭취 권고</p>
-                    <strong>{escape(guidance["water_text"])}</strong>
-                </article>
-                <article class="detail-card">
-                    <p>관리 조치</p>
-                    <strong>{escape(guidance["control_text"])}</strong>
-                </article>
-            </section>
-            <aside class="notice">
-                이 화면은 제공된 WBGT 예시 로직에 따른 참고 대시보드입니다.
-                현장 대응은 작업 조건, 민감군 여부, 증상, 공식 폭염 안내를 함께 확인하세요.
-            </aside>
+            {detail_disclosure(values)}
             """,
             unsafe_allow_html=True,
         )
