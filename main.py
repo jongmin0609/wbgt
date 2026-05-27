@@ -6,7 +6,11 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from measurement_store import read_measurement
-from metabolism import calculate_calories, estimate_vo2
+from metabolism import (
+    calculate_calories_from_vo2,
+    calculate_energy_keytel,
+    estimate_vo2_by_hrr,
+)
 from utils import get_risk_guidance, should_trigger_alert
 from wbgt_risk import calculate_heat_risk
 
@@ -526,11 +530,42 @@ def render_live_dashboard():
     status_title, status_detail = measurement_status(measurement)
 
     try:
-        vo2 = estimate_vo2(age, sex, heart_rate)
-        kcal = calculate_calories(vo2, weight)
-        risk, workload = calculate_heat_risk(wbgt, kcal)
-        guidance = get_risk_guidance(risk)
-        manager_alert = should_trigger_alert(risk)
+        resting_hr = 65
+acclimatized = True
+clothing_adjustment = 0.0
+
+vo2, hrr_ratio, hr_max = estimate_vo2_by_hrr(
+    age=age,
+    sex=sex,
+    heart_rate=heart_rate,
+    resting_hr=resting_hr,
+)
+
+kcal_from_vo2 = calculate_calories_from_vo2(vo2, weight)
+
+kcal = calculate_energy_keytel(
+    heart_rate=heart_rate,
+    weight=weight,
+    age=age,
+    sex=sex,
+)
+
+risk_result = calculate_heat_risk(
+    wbgt=wbgt,
+    kcal_min=kcal,
+    acclimatized=acclimatized,
+    clothing_adjustment=clothing_adjustment,
+)
+
+risk = risk_result["risk"]
+workload = risk_result["workload"]
+metabolic_watts = risk_result["metabolic_watts"]
+limit_wbgt = risk_result["limit_wbgt"]
+adjusted_wbgt = risk_result["adjusted_wbgt"]
+margin = risk_result["margin"]
+
+guidance = get_risk_guidance(risk)
+manager_alert = should_trigger_alert(risk)
     except ValueError as error:
         st.error(str(error))
         return
@@ -578,21 +613,37 @@ def render_live_dashboard():
         </section>
         <section class="detail-grid" data-testid="calculation-details">
             <article class="detail-card">
-                <p>작업강도</p>
-                <strong>{escape(workload)}</strong>
-            </article>
-            <article class="detail-card">
-                <p>VO2 추정값</p>
-                <strong>{vo2:.2f} ml/kg/min</strong>
-            </article>
-            <article class="detail-card">
-                <p>추정 칼로리 소모량</p>
-                <strong>{kcal:.2f} kcal/min</strong>
-            </article>
-            <article class="detail-card">
-                <p>입력 프로필</p>
-                <strong>{age}세 / {weight:g}kg / {sex_label(sex)}</strong>
-            </article>
+    <p>작업강도</p>
+    <strong>{escape(workload)}</strong>
+</article>
+<article class="detail-card">
+    <p>VO2 추정값</p>
+    <strong>{vo2:.2f} ml/kg/min</strong>
+</article>
+<article class="detail-card">
+    <p>Keytel 기반 칼로리 소모량</p>
+    <strong>{kcal:.2f} kcal/min</strong>
+</article>
+<article class="detail-card">
+    <p>대사율</p>
+    <strong>{metabolic_watts:.0f} W</strong>
+</article>
+<article class="detail-card">
+    <p>NIOSH 기준 WBGT</p>
+    <strong>{limit_wbgt:.1f} ℃</strong>
+</article>
+<article class="detail-card">
+    <p>기준 여유</p>
+    <strong>{margin:.1f} ℃</strong>
+</article>
+<article class="detail-card">
+    <p>입력 프로필</p>
+    <strong>{age}세 / {weight:g}kg / {sex_label(sex)}</strong>
+</article>
+<article class="detail-card">
+    <p>적용 조건</p>
+    <strong>순화 작업자 / 보정 WBGT {adjusted_wbgt:.1f}℃</strong>
+</article>
         </section>
         <aside class="notice">
             이 화면은 제공된 WBGT 예시 로직에 따른 참고 대시보드입니다.
