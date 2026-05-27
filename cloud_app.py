@@ -5,6 +5,7 @@ import json
 import streamlit as st
 import streamlit.components.v1 as components
 
+from acclimatization import WORKER_STATUS_LABELS, evaluate_acclimatization
 from measurement_store import read_measurement, write_measurement
 from metabolism import (
     calculate_calories_from_vo2,
@@ -439,8 +440,13 @@ def calculate_dashboard_values(measurement):
     weight = measurement["weight"]
     sex = measurement["sex"]
     resting_hr = 65
-    acclimatized = True
     clothing_adjustment = 0.0
+    acclimatization = evaluate_acclimatization(
+        worker_status=measurement["worker_status"],
+        heat_exposure_days=measurement["heat_exposure_days"],
+        absence_days=measurement["absence_days"],
+        similar_heat_work=measurement["similar_heat_work"],
+    )
 
     vo2, hrr_ratio, hr_max = estimate_vo2_by_hrr(
         age=age,
@@ -458,7 +464,7 @@ def calculate_dashboard_values(measurement):
     risk_result = calculate_heat_risk(
         wbgt=wbgt,
         kcal_min=kcal,
-        acclimatized=acclimatized,
+        acclimatized=acclimatization["acclimatized"],
         clothing_adjustment=clothing_adjustment,
     )
     guidance = get_risk_guidance(risk_result["risk"])
@@ -477,9 +483,11 @@ def calculate_dashboard_values(measurement):
         "risk": risk_result["risk"],
         "workload": risk_result["workload"],
         "metabolic_watts": risk_result["metabolic_watts"],
+        "limit_type": risk_result["limit_type"],
         "limit_wbgt": risk_result["limit_wbgt"],
         "adjusted_wbgt": risk_result["adjusted_wbgt"],
         "margin": risk_result["margin"],
+        "acclimatization": acclimatization,
         "guidance": guidance,
         "manager_alert": should_trigger_alert(risk_result["risk"]),
     }
@@ -526,6 +534,7 @@ def render_dashboard():
             """
 
         guidance = values["guidance"]
+        acclimatization = values["acclimatization"]
         st.markdown(
             f"""
             <section class="feed-status" data-testid="feed-status">
@@ -537,7 +546,7 @@ def render_dashboard():
                 <p>현재 위험도 단계</p>
                 <div class="risk-title">
                     <h2>{escape(values["risk"])}</h2>
-                    <span class="risk-badge">WBGT 판정</span>
+                    <span class="risk-badge">{escape(values["limit_type"])} 기준</span>
                 </div>
                 <div class="risk-rest">
                     <p>권장 휴식 시간</p>
@@ -568,7 +577,7 @@ def render_dashboard():
                     <strong>{values["metabolic_watts"]:.0f} W</strong>
                 </article>
                 <article class="detail-card">
-                    <p>NIOSH 기준 WBGT</p>
+                    <p>NIOSH {escape(values["limit_type"])} 기준 WBGT</p>
                     <strong>{values["limit_wbgt"]:.1f} ℃</strong>
                 </article>
                 <article class="detail-card">
@@ -580,8 +589,16 @@ def render_dashboard():
                     <strong>{values["age"]}세 / {values["weight"]:g}kg / {sex_label(values["sex"])}</strong>
                 </article>
                 <article class="detail-card">
+                    <p>순화 판정</p>
+                    <strong>{escape(acclimatization["status_label"])} / {escape(values["limit_type"])}</strong>
+                </article>
+                <article class="detail-card">
+                    <p>판정 근거</p>
+                    <strong>{escape(acclimatization["summary"])}</strong>
+                </article>
+                <article class="detail-card">
                     <p>적용 조건</p>
-                    <strong>순화 작업자 / 보정 WBGT {values["adjusted_wbgt"]:.1f}℃</strong>
+                    <strong>{escape(acclimatization["status_label"])} / 보정 WBGT {values["adjusted_wbgt"]:.1f}℃</strong>
                 </article>
             </section>
             <aside class="notice">
@@ -598,6 +615,7 @@ def render_dashboard():
 def render_input_page():
     current = read_measurement()
     sex_options = list(SEX_LABELS)
+    worker_status_options = list(WORKER_STATUS_LABELS)
 
     st.markdown(
         f"""
@@ -664,6 +682,48 @@ def render_input_page():
                 format_func=SEX_LABELS.get,
             )
 
+        st.subheader("순화 판정")
+        acclimatization_columns = st.columns(2)
+        with acclimatization_columns[0]:
+            worker_status = st.selectbox(
+                "작업자 상태",
+                options=worker_status_options,
+                index=worker_status_options.index(current["worker_status"]),
+                format_func=WORKER_STATUS_LABELS.get,
+            )
+            heat_exposure_days = st.number_input(
+                "최근 14일 유사 더위 작업일수",
+                min_value=0,
+                max_value=14,
+                value=current["heat_exposure_days"],
+                step=1,
+            )
+        with acclimatization_columns[1]:
+            absence_days = st.number_input(
+                "연속 부재일수",
+                min_value=0,
+                max_value=365,
+                value=current["absence_days"],
+                step=1,
+                help="휴가, 병가, 배치 전환 등 더운 작업에서 떨어진 기간",
+            )
+            similar_heat_work = st.checkbox(
+                "최근 작업 강도가 오늘 작업과 유사함",
+                value=current["similar_heat_work"],
+            )
+
+        acclimatization_preview = evaluate_acclimatization(
+            worker_status=worker_status,
+            heat_exposure_days=heat_exposure_days,
+            absence_days=absence_days,
+            similar_heat_work=similar_heat_work,
+        )
+        st.info(
+            f"판정: {acclimatization_preview['status_label']} "
+            f"({acclimatization_preview['limit_type']} 적용) · "
+            f"{acclimatization_preview['summary']}"
+        )
+
         submitted = st.form_submit_button("대시보드로 전송", type="primary")
 
     if submitted:
@@ -674,13 +734,18 @@ def render_input_page():
                 age=age,
                 weight=weight,
                 sex=sex,
+                worker_status=worker_status,
+                heat_exposure_days=heat_exposure_days,
+                absence_days=absence_days,
+                similar_heat_work=similar_heat_work,
             )
         except ValueError as error:
             st.error(str(error))
         else:
             st.success(
                 f"저장 완료: {payload['heart_rate']} bpm / WBGT {payload['wbgt']:.1f} / "
-                f"{payload['age']}세 / {payload['weight']:g}kg / {SEX_LABELS[payload['sex']]}"
+                f"{payload['age']}세 / {payload['weight']:g}kg / {SEX_LABELS[payload['sex']]} / "
+                f"{acclimatization_preview['status_label']}"
             )
 
 

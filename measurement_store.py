@@ -5,6 +5,11 @@ from datetime import datetime
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
+from acclimatization import (
+    DEFAULT_ACCLIMATIZATION,
+    validate_acclimatization_inputs,
+)
+
 
 BASE_DIR = Path(__file__).parent
 DATA_DIR = Path(os.getenv("WGBT_DATA_DIR", BASE_DIR / "data"))
@@ -19,6 +24,7 @@ FALLBACK_MEASUREMENT = {
     "heart_rate": 130,
     "wbgt": 31.2,
     **DEFAULT_PROFILE,
+    **DEFAULT_ACCLIMATIZATION,
     "source": "fallback",
     "updated_at": None,
 }
@@ -87,6 +93,20 @@ def load_sample_measurement(sample_path=SAMPLE_MEASUREMENT_PATH):
             latest.get("weight", DEFAULT_PROFILE["weight"]),
             latest.get("sex", DEFAULT_PROFILE["sex"]),
         )
+        worker_status, heat_exposure_days, absence_days, similar_heat_work = (
+            validate_acclimatization_inputs(
+                latest.get("worker_status", DEFAULT_ACCLIMATIZATION["worker_status"]),
+                latest.get(
+                    "heat_exposure_days",
+                    DEFAULT_ACCLIMATIZATION["heat_exposure_days"],
+                ),
+                latest.get("absence_days", DEFAULT_ACCLIMATIZATION["absence_days"]),
+                latest.get(
+                    "similar_heat_work",
+                    DEFAULT_ACCLIMATIZATION["similar_heat_work"],
+                ),
+            )
+        )
     except (KeyError, ValueError):
         return FALLBACK_MEASUREMENT.copy()
 
@@ -96,6 +116,10 @@ def load_sample_measurement(sample_path=SAMPLE_MEASUREMENT_PATH):
         "age": age,
         "weight": weight,
         "sex": sex,
+        "worker_status": worker_status,
+        "heat_exposure_days": heat_exposure_days,
+        "absence_days": absence_days,
+        "similar_heat_work": similar_heat_work,
         "source": "sample",
         "updated_at": latest.get("time"),
     }
@@ -119,6 +143,20 @@ def read_measurement(
             payload.get("weight", DEFAULT_PROFILE["weight"]),
             payload.get("sex", DEFAULT_PROFILE["sex"]),
         )
+        worker_status, heat_exposure_days, absence_days, similar_heat_work = (
+            validate_acclimatization_inputs(
+                payload.get("worker_status", DEFAULT_ACCLIMATIZATION["worker_status"]),
+                payload.get(
+                    "heat_exposure_days",
+                    DEFAULT_ACCLIMATIZATION["heat_exposure_days"],
+                ),
+                payload.get("absence_days", DEFAULT_ACCLIMATIZATION["absence_days"]),
+                payload.get(
+                    "similar_heat_work",
+                    DEFAULT_ACCLIMATIZATION["similar_heat_work"],
+                ),
+            )
+        )
     except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError):
         return load_sample_measurement(sample_path)
 
@@ -128,6 +166,10 @@ def read_measurement(
         "age": age,
         "weight": weight,
         "sex": sex,
+        "worker_status": worker_status,
+        "heat_exposure_days": heat_exposure_days,
+        "absence_days": absence_days,
+        "similar_heat_work": similar_heat_work,
         "source": "computer",
         "updated_at": payload.get("updated_at"),
     }
@@ -139,11 +181,26 @@ def write_measurement(
     age=DEFAULT_PROFILE["age"],
     weight=DEFAULT_PROFILE["weight"],
     sex=DEFAULT_PROFILE["sex"],
+    worker_status=DEFAULT_ACCLIMATIZATION["worker_status"],
+    heat_exposure_days=DEFAULT_ACCLIMATIZATION["heat_exposure_days"],
+    absence_days=DEFAULT_ACCLIMATIZATION["absence_days"],
+    similar_heat_work=DEFAULT_ACCLIMATIZATION["similar_heat_work"],
     measurement_path=CURRENT_MEASUREMENT_PATH,
     updated_at=None,
 ):
     normalized_heart_rate, normalized_wbgt = validate_measurement(heart_rate, wbgt)
     normalized_age, normalized_weight, normalized_sex = validate_profile(age, weight, sex)
+    (
+        normalized_worker_status,
+        normalized_heat_exposure_days,
+        normalized_absence_days,
+        normalized_similar_heat_work,
+    ) = validate_acclimatization_inputs(
+        worker_status,
+        heat_exposure_days,
+        absence_days,
+        similar_heat_work,
+    )
     timestamp = updated_at or datetime.now().astimezone().isoformat(timespec="seconds")
     payload = {
         "heart_rate": normalized_heart_rate,
@@ -151,6 +208,10 @@ def write_measurement(
         "age": normalized_age,
         "weight": normalized_weight,
         "sex": normalized_sex,
+        "worker_status": normalized_worker_status,
+        "heat_exposure_days": normalized_heat_exposure_days,
+        "absence_days": normalized_absence_days,
+        "similar_heat_work": normalized_similar_heat_work,
         "updated_at": timestamp,
     }
 

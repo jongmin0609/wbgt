@@ -36,6 +36,10 @@ def calculate_niosh_limit(metabolic_watts, acclimatized=True):
         return 59.9 - 14.1 * math.log10(metabolic_watts)
 
 
+def niosh_limit_type(acclimatized):
+    return "REL" if acclimatized else "RAL"
+
+
 def classify_heat_risk_by_niosh(
     wbgt,
     metabolic_watts,
@@ -111,6 +115,7 @@ def calculate_heat_risk(
         "risk": risk_result["risk"],
         "workload": workload,
         "metabolic_watts": metabolic_watts,
+        "limit_type": niosh_limit_type(acclimatized),
         "adjusted_wbgt": risk_result["adjusted_wbgt"],
         "limit_wbgt": risk_result["limit_wbgt"],
         "margin": risk_result["margin"],

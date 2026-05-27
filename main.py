@@ -5,6 +5,7 @@ import json
 import streamlit as st
 import streamlit.components.v1 as components
 
+from acclimatization import evaluate_acclimatization
 from measurement_store import read_measurement
 from metabolism import (
     calculate_calories_from_vo2,
@@ -531,8 +532,13 @@ def render_live_dashboard():
 
     try:
         resting_hr = 65
-        acclimatized = True
         clothing_adjustment = 0.0
+        acclimatization = evaluate_acclimatization(
+            worker_status=measurement["worker_status"],
+            heat_exposure_days=measurement["heat_exposure_days"],
+            absence_days=measurement["absence_days"],
+            similar_heat_work=measurement["similar_heat_work"],
+        )
 
         vo2, hrr_ratio, hr_max = estimate_vo2_by_hrr(
             age=age,
@@ -553,13 +559,14 @@ def render_live_dashboard():
         risk_result = calculate_heat_risk(
             wbgt=wbgt,
             kcal_min=kcal,
-            acclimatized=acclimatized,
+            acclimatized=acclimatization["acclimatized"],
             clothing_adjustment=clothing_adjustment,
         )
 
         risk = risk_result["risk"]
         workload = risk_result["workload"]
         metabolic_watts = risk_result["metabolic_watts"]
+        limit_type = risk_result["limit_type"]
         limit_wbgt = risk_result["limit_wbgt"]
         adjusted_wbgt = risk_result["adjusted_wbgt"]
         margin = risk_result["margin"]
@@ -599,7 +606,7 @@ def render_live_dashboard():
             <p>현재 위험도 단계</p>
             <div class="risk-title">
                 <h2>{escape(risk)}</h2>
-                <span class="risk-badge">WBGT 판정</span>
+                <span class="risk-badge">{escape(limit_type)} 기준</span>
             </div>
             <div class="risk-rest">
                 <p>권장 휴식 시간</p>
@@ -630,7 +637,7 @@ def render_live_dashboard():
                 <strong>{metabolic_watts:.0f} W</strong>
             </article>
             <article class="detail-card">
-                <p>NIOSH 기준 WBGT</p>
+                <p>NIOSH {escape(limit_type)} 기준 WBGT</p>
                 <strong>{limit_wbgt:.1f} ℃</strong>
             </article>
             <article class="detail-card">
@@ -642,8 +649,16 @@ def render_live_dashboard():
                 <strong>{age}세 / {weight:g}kg / {sex_label(sex)}</strong>
             </article>
             <article class="detail-card">
+                <p>순화 판정</p>
+                <strong>{escape(acclimatization["status_label"])} / {escape(limit_type)}</strong>
+            </article>
+            <article class="detail-card">
+                <p>판정 근거</p>
+                <strong>{escape(acclimatization["summary"])}</strong>
+            </article>
+            <article class="detail-card">
                 <p>적용 조건</p>
-                <strong>순화 작업자 / 보정 WBGT {adjusted_wbgt:.1f}℃</strong>
+                <strong>{escape(acclimatization["status_label"])} / 보정 WBGT {adjusted_wbgt:.1f}℃</strong>
             </article>
         </section>
         <aside class="notice">

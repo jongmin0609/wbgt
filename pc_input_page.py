@@ -2,6 +2,7 @@ from datetime import datetime
 
 import streamlit as st
 
+from acclimatization import WORKER_STATUS_LABELS, evaluate_acclimatization
 from measurement_store import read_measurement, write_measurement
 
 
@@ -118,6 +119,7 @@ st.markdown(
 
 current = read_measurement()
 sex_options = list(SEX_LABELS)
+worker_status_options = list(WORKER_STATUS_LABELS)
 
 st.markdown(
     f"""
@@ -183,6 +185,48 @@ with st.form("measurement-form"):
             format_func=SEX_LABELS.get,
         )
 
+    st.subheader("순화 판정")
+    acclimatization_columns = st.columns(2)
+    with acclimatization_columns[0]:
+        worker_status = st.selectbox(
+            "작업자 상태",
+            options=worker_status_options,
+            index=worker_status_options.index(current["worker_status"]),
+            format_func=WORKER_STATUS_LABELS.get,
+        )
+        heat_exposure_days = st.number_input(
+            "최근 14일 유사 더위 작업일수",
+            min_value=0,
+            max_value=14,
+            value=current["heat_exposure_days"],
+            step=1,
+        )
+    with acclimatization_columns[1]:
+        absence_days = st.number_input(
+            "연속 부재일수",
+            min_value=0,
+            max_value=365,
+            value=current["absence_days"],
+            step=1,
+            help="휴가, 병가, 배치 전환 등 더운 작업에서 떨어진 기간",
+        )
+        similar_heat_work = st.checkbox(
+            "최근 작업 강도가 오늘 작업과 유사함",
+            value=current["similar_heat_work"],
+        )
+
+    acclimatization_preview = evaluate_acclimatization(
+        worker_status=worker_status,
+        heat_exposure_days=heat_exposure_days,
+        absence_days=absence_days,
+        similar_heat_work=similar_heat_work,
+    )
+    st.info(
+        f"판정: {acclimatization_preview['status_label']} "
+        f"({acclimatization_preview['limit_type']} 적용) · "
+        f"{acclimatization_preview['summary']}"
+    )
+
     submitted = st.form_submit_button("대시보드로 전송", type="primary")
 
 if submitted:
@@ -193,11 +237,16 @@ if submitted:
             age=age,
             weight=weight,
             sex=sex,
+            worker_status=worker_status,
+            heat_exposure_days=heat_exposure_days,
+            absence_days=absence_days,
+            similar_heat_work=similar_heat_work,
         )
     except ValueError as error:
         st.error(str(error))
     else:
         st.success(
             f"저장 완료: {payload['heart_rate']} bpm / WBGT {payload['wbgt']:.1f} / "
-            f"{payload['age']}세 / {payload['weight']:g}kg / {SEX_LABELS[payload['sex']]}"
+            f"{payload['age']}세 / {payload['weight']:g}kg / {SEX_LABELS[payload['sex']]} / "
+            f"{acclimatization_preview['status_label']}"
         )

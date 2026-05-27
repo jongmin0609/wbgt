@@ -2,6 +2,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from acclimatization import evaluate_acclimatization
 from measurement_store import (
     read_measurement,
     validate_measurement,
@@ -63,8 +64,18 @@ class HeatRiskTests(unittest.TestCase):
         result = calculate_heat_risk(wbgt=31.2, kcal_min=10.97)
 
         self.assertEqual(result["workload"], "매우 고강도")
+        self.assertEqual(result["limit_type"], "REL")
         self.assertEqual(result["risk"], "즉시 작업중지")
         self.assertLess(result["margin"], -4.0)
+
+    def test_unacclimatized_workers_use_more_restrictive_ral(self):
+        rel_result = calculate_heat_risk(wbgt=26, kcal_min=5, acclimatized=True)
+        ral_result = calculate_heat_risk(wbgt=26, kcal_min=5, acclimatized=False)
+
+        self.assertEqual(rel_result["limit_type"], "REL")
+        self.assertEqual(ral_result["limit_type"], "RAL")
+        self.assertLess(ral_result["limit_wbgt"], rel_result["limit_wbgt"])
+        self.assertLessEqual(ral_result["margin"], rel_result["margin"])
 
     def test_risk_thresholds_cover_dashboard_labels(self):
         self.assertEqual(calculate_heat_risk(wbgt=29.5, kcal_min=2)["risk"], "안전")
@@ -110,6 +121,60 @@ class GuidanceTests(unittest.TestCase):
         self.assertTrue(should_trigger_alert("즉시 작업중지"))
 
 
+class AcclimatizationTests(unittest.TestCase):
+    def test_existing_worker_with_recent_similar_heat_work_is_acclimatized(self):
+        result = evaluate_acclimatization(
+            worker_status="existing",
+            heat_exposure_days=7,
+            absence_days=0,
+            similar_heat_work=True,
+        )
+
+        self.assertTrue(result["acclimatized"])
+        self.assertEqual(result["limit_type"], "REL")
+        self.assertEqual(result["status_label"], "순화 작업자")
+
+    def test_new_or_returning_worker_is_unacclimatized_until_enough_exposure(self):
+        new_worker = evaluate_acclimatization(
+            worker_status="new",
+            heat_exposure_days=3,
+            absence_days=0,
+            similar_heat_work=True,
+        )
+        returning_worker = evaluate_acclimatization(
+            worker_status="returning",
+            heat_exposure_days=3,
+            absence_days=8,
+            similar_heat_work=True,
+        )
+
+        self.assertFalse(new_worker["acclimatized"])
+        self.assertFalse(returning_worker["acclimatized"])
+        self.assertEqual(new_worker["limit_type"], "RAL")
+        self.assertEqual(returning_worker["limit_type"], "RAL")
+
+    def test_non_similar_recent_work_does_not_count_as_acclimatized(self):
+        result = evaluate_acclimatization(
+            worker_status="existing",
+            heat_exposure_days=10,
+            absence_days=0,
+            similar_heat_work=False,
+        )
+
+        self.assertFalse(result["acclimatized"])
+        self.assertEqual(result["limit_type"], "RAL")
+
+    def test_acclimatization_validation_rejects_bad_ranges(self):
+        with self.assertRaisesRegex(ValueError, "작업자 상태"):
+            evaluate_acclimatization("unknown", 7, 0, True)
+
+        with self.assertRaisesRegex(ValueError, "0~14일"):
+            evaluate_acclimatization("existing", 15, 0, True)
+
+        with self.assertRaisesRegex(ValueError, "0~365일"):
+            evaluate_acclimatization("existing", 7, -1, True)
+
+
 class MeasurementStoreTests(unittest.TestCase):
     def test_written_pc_measurement_is_shared_from_json(self):
         with TemporaryDirectory() as temp_dir:
@@ -122,6 +187,10 @@ class MeasurementStoreTests(unittest.TestCase):
                 age=38,
                 weight=82.5,
                 sex="female",
+                worker_status="returning",
+                heat_exposure_days=3,
+                absence_days=9,
+                similar_heat_work=True,
                 measurement_path=measurement_path,
                 updated_at="2026-05-23T11:20:30+09:00",
             )
@@ -132,6 +201,10 @@ class MeasurementStoreTests(unittest.TestCase):
         self.assertEqual(measurement["age"], 38)
         self.assertEqual(measurement["weight"], 82.5)
         self.assertEqual(measurement["sex"], "female")
+        self.assertEqual(measurement["worker_status"], "returning")
+        self.assertEqual(measurement["heat_exposure_days"], 3)
+        self.assertEqual(measurement["absence_days"], 9)
+        self.assertTrue(measurement["similar_heat_work"])
         self.assertEqual(measurement["source"], "computer")
         self.assertEqual(measurement["updated_at"], "2026-05-23T11:20:30+09:00")
 
@@ -152,6 +225,10 @@ class MeasurementStoreTests(unittest.TestCase):
         self.assertEqual(measurement["age"], 25)
         self.assertEqual(measurement["weight"], 70.0)
         self.assertEqual(measurement["sex"], "male")
+        self.assertEqual(measurement["worker_status"], "existing")
+        self.assertEqual(measurement["heat_exposure_days"], 7)
+        self.assertEqual(measurement["absence_days"], 0)
+        self.assertTrue(measurement["similar_heat_work"])
         self.assertEqual(measurement["source"], "sample")
         self.assertEqual(measurement["updated_at"], "10:02")
 
