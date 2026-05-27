@@ -61,8 +61,10 @@ def format_margin(margin):
 def risk_scale(position):
     return (
         '<div class="risk-scale" aria-hidden="true">'
+        '<div class="risk-meter">'
         '<div class="risk-track"></div>'
         f'<span class="risk-marker" style="left: {position:.1f}%"></span>'
+        "</div>"
         '<div class="risk-scale-labels">'
         "<span><b>기준 여유 +4℃ 이상</b><small>위험 낮음</small></span>"
         "<span><b>기준 여유 -6℃ 이하</b><small>위험 높음</small></span>"
@@ -75,7 +77,11 @@ def action_checklist(items):
     return (
         '<ul class="action-list">'
         + "".join(
-            f'<li><span class="check-icon" aria-hidden="true">&#10003;</span><strong>{escape(item)}</strong></li>'
+            '<li>'
+            f'<label class="action-check"><input type="checkbox" aria-label="{escape(item)}">'
+            '<span class="check-icon" aria-hidden="true">&#10003;</span>'
+            f'<strong>{escape(item)}</strong></label>'
+            '</li>'
             for item in items
         )
         + "</ul>"
@@ -124,11 +130,17 @@ def apply_styles():
                 --line: #d7dee7;
                 --surface: #ffffff;
                 --canvas: #f4f7f9;
-                --safe: #137a45;
-                --caution: #b7791f;
-                --danger: #c2410c;
-                --severe: #b42318;
-                --stop: #7a271a;
+                --safe: #84cc16;
+                --safe-text: #3f6212;
+                --caution: #16a34a;
+                --caution-text: #166534;
+                --danger: #facc15;
+                --danger-text: #854d0e;
+                --severe: #f97316;
+                --severe-text: #9a3412;
+                --stop: #dc2626;
+                --stop-text: #991b1b;
+                --done: #16a34a;
             }
             .stApp { background: var(--canvas); color: var(--ink); }
             .block-container {
@@ -251,11 +263,18 @@ def apply_styles():
                 font-size: 2rem;
                 line-height: 1;
             }
+            .risk-margin-value {
+                align-items: center;
+                display: inline-flex;
+                gap: 0.18rem;
+                justify-content: flex-end;
+                white-space: nowrap;
+            }
             .risk-margin small {
                 color: var(--muted);
                 font-size: 0.82rem;
                 font-weight: 700;
-                margin-left: 0.12rem;
+                margin-left: 0;
             }
             .risk-badge {
                 border-radius: 999px;
@@ -271,8 +290,19 @@ def apply_styles():
                 font-size: 1.05rem;
                 line-height: 1.55;
             }
+            .risk-panel .risk-margin-value strong {
+                display: inline;
+                font-size: 2rem;
+                line-height: 1;
+            }
             .risk-scale {
                 margin: 0.7rem 0 0.95rem;
+                position: relative;
+            }
+            .risk-meter {
+                align-items: center;
+                display: flex;
+                height: 28px;
                 position: relative;
             }
             .risk-track {
@@ -290,20 +320,20 @@ def apply_styles():
                     var(--stop) 100%
                 );
                 border-radius: 999px;
-                height: 10px;
+                height: 12px;
                 opacity: 0.92;
                 width: 100%;
             }
             .risk-marker {
                 background: #ffffff;
-                border: 3px solid #101828;
+                border: 2px solid #101828;
                 border-radius: 999px;
-                box-shadow: 0 2px 8px rgba(16, 24, 40, 0.22);
-                height: 18px;
+                box-shadow: 0 2px 8px rgba(16, 24, 40, 0.26);
+                height: 26px;
                 position: absolute;
                 top: 50%;
                 transform: translate(-50%, -50%);
-                width: 18px;
+                width: 8px;
             }
             .risk-scale-labels {
                 color: var(--muted);
@@ -340,31 +370,31 @@ def apply_styles():
                 font-weight: 700;
                 padding: 0.35rem 0.58rem;
             }
-            .risk-safe { border-left-color: #137a45; }
+            .risk-safe { border-left-color: var(--safe); }
             .risk-safe { border-top-color: var(--safe); }
-            .risk-safe .risk-badge { background: #e7f6ed; color: #137a45; }
-            .risk-caution { border-left-color: #9b6400; }
+            .risk-safe .risk-badge { background: #ecfccb; color: var(--safe-text); }
+            .risk-caution { border-left-color: var(--caution); }
             .risk-caution { border-top-color: var(--caution); }
-            .risk-caution .risk-badge { background: #fff2d8; color: #8b5800; }
-            .risk-danger { border-left-color: #c2410c; }
+            .risk-caution .risk-badge { background: #dcfce7; color: var(--caution-text); }
+            .risk-danger { border-left-color: var(--danger); }
             .risk-danger { border-top-color: var(--danger); }
-            .risk-danger .risk-badge { background: #ffe7db; color: #b53b0b; }
-            .risk-severe { border-left-color: #b42318; }
+            .risk-danger .risk-badge { background: #fef9c3; color: var(--danger-text); }
+            .risk-severe { border-left-color: var(--severe); }
             .risk-severe { border-top-color: var(--severe); }
-            .risk-severe .risk-badge { background: #fee4e2; color: #b42318; }
-            .risk-stop { border-left-color: #7a271a; }
+            .risk-severe .risk-badge { background: #ffedd5; color: var(--severe-text); }
+            .risk-stop { border-left-color: var(--stop); }
             .risk-stop { border-top-color: var(--stop); }
-            .risk-stop .risk-badge { background: #fecdca; color: #7a271a; }
-            .risk-safe .risk-title h2 { color: var(--safe); }
-            .risk-caution .risk-title h2 { color: var(--caution); }
-            .risk-danger .risk-title h2 { color: var(--danger); }
-            .risk-severe .risk-title h2 { color: var(--severe); }
-            .risk-stop .risk-title h2 { color: var(--stop); }
-            .risk-safe .risk-margin strong { color: var(--safe); }
-            .risk-caution .risk-margin strong { color: var(--caution); }
-            .risk-danger .risk-margin strong { color: var(--danger); }
-            .risk-severe .risk-margin strong { color: var(--severe); }
-            .risk-stop .risk-margin strong { color: var(--stop); }
+            .risk-stop .risk-badge { background: #fee2e2; color: var(--stop-text); }
+            .risk-safe .risk-title h2 { color: var(--safe-text); }
+            .risk-caution .risk-title h2 { color: var(--caution-text); }
+            .risk-danger .risk-title h2 { color: var(--danger-text); }
+            .risk-severe .risk-title h2 { color: var(--severe-text); }
+            .risk-stop .risk-title h2 { color: var(--stop-text); }
+            .risk-safe .risk-margin strong { color: var(--safe-text); }
+            .risk-caution .risk-margin strong { color: var(--caution-text); }
+            .risk-danger .risk-margin strong { color: var(--danger-text); }
+            .risk-severe .risk-margin strong { color: var(--severe-text); }
+            .risk-stop .risk-margin strong { color: var(--stop-text); }
             .action-heading {
                 color: var(--muted);
                 font-size: 0.88rem;
@@ -380,16 +410,28 @@ def apply_styles():
             }
             .action-list li {
                 align-items: flex-start;
-                display: flex;
-                gap: 0.62rem;
                 line-height: 1.45;
+            }
+            .action-check {
+                align-items: flex-start;
+                cursor: pointer;
+                display: inline-flex;
+                gap: 0.62rem;
+                min-height: 1.5rem;
+            }
+            .action-check input {
+                height: 1px;
+                opacity: 0;
+                pointer-events: none;
+                position: absolute;
+                width: 1px;
             }
             .action-list .check-icon {
                 align-items: center;
-                background: #ecfdf3;
-                border: 1px solid #abefc6;
+                background: #ffffff;
+                border: 1px solid #fecaca;
                 border-radius: 999px;
-                color: var(--safe);
+                color: var(--stop);
                 display: inline-flex;
                 flex: 0 0 auto;
                 font-size: 0.72rem;
@@ -399,10 +441,17 @@ def apply_styles():
                 margin-top: 0.15rem;
                 width: 1.16rem;
             }
-            .risk-caution .check-icon { background: #fffaeb; border-color: #fedf89; color: var(--caution); }
-            .risk-danger .check-icon { background: #fff4ed; border-color: #fdb022; color: var(--danger); }
-            .risk-severe .check-icon { background: #fef3f2; border-color: #f97066; color: var(--severe); }
-            .risk-stop .check-icon { background: #fef3f2; border-color: #fecdca; color: var(--stop); }
+            .action-check:hover .check-icon {
+                box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.11);
+            }
+            .action-check input:checked + .check-icon {
+                background: var(--done);
+                border-color: var(--done);
+                color: #ffffff;
+            }
+            .action-check input:checked ~ strong {
+                color: #344054;
+            }
             .action-list li strong {
                 color: var(--ink);
                 display: inline;
@@ -807,7 +856,7 @@ def render_dashboard():
                     </div>
                     <div class="risk-margin" aria-label="기준 여유">
                         <span>기준 여유</span>
-                        <strong>{format_margin(values["margin"])}</strong><small>℃</small>
+                        <div class="risk-margin-value"><strong>{format_margin(values["margin"])}</strong><small>℃</small></div>
                     </div>
                 </div>
                 {risk_scale(values["risk_score"])}
