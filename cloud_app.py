@@ -132,14 +132,12 @@ def apply_styles():
                 --canvas: #f4f7f9;
                 --safe: #84cc16;
                 --safe-text: #3f6212;
-                --caution: #16a34a;
-                --caution-text: #166534;
-                --danger: #facc15;
-                --danger-text: #854d0e;
-                --severe: #f97316;
-                --severe-text: #9a3412;
-                --stop: #dc2626;
-                --stop-text: #991b1b;
+                --caution: #facc15;
+                --caution-text: #854d0e;
+                --warning: #f97316;
+                --warning-text: #9a3412;
+                --danger: #dc2626;
+                --danger-text: #991b1b;
                 --done: #16a34a;
             }
             .stApp { background: var(--canvas); color: var(--ink); }
@@ -312,12 +310,10 @@ def apply_styles():
                     var(--safe) 20%,
                     var(--caution) 20%,
                     var(--caution) 40%,
-                    var(--danger) 40%,
+                    var(--warning) 40%,
+                    var(--warning) 60%,
                     var(--danger) 60%,
-                    var(--severe) 60%,
-                    var(--severe) 80%,
-                    var(--stop) 80%,
-                    var(--stop) 100%
+                    var(--danger) 100%
                 );
                 border-radius: 999px;
                 height: 12px;
@@ -375,26 +371,21 @@ def apply_styles():
             .risk-safe .risk-badge { background: #ecfccb; color: var(--safe-text); }
             .risk-caution { border-left-color: var(--caution); }
             .risk-caution { border-top-color: var(--caution); }
-            .risk-caution .risk-badge { background: #dcfce7; color: var(--caution-text); }
+            .risk-caution .risk-badge { background: #fef9c3; color: var(--caution-text); }
+            .risk-warning { border-left-color: var(--warning); }
+            .risk-warning { border-top-color: var(--warning); }
+            .risk-warning .risk-badge { background: #ffedd5; color: var(--warning-text); }
             .risk-danger { border-left-color: var(--danger); }
             .risk-danger { border-top-color: var(--danger); }
-            .risk-danger .risk-badge { background: #fef9c3; color: var(--danger-text); }
-            .risk-severe { border-left-color: var(--severe); }
-            .risk-severe { border-top-color: var(--severe); }
-            .risk-severe .risk-badge { background: #ffedd5; color: var(--severe-text); }
-            .risk-stop { border-left-color: var(--stop); }
-            .risk-stop { border-top-color: var(--stop); }
-            .risk-stop .risk-badge { background: #fee2e2; color: var(--stop-text); }
+            .risk-danger .risk-badge { background: #fee2e2; color: var(--danger-text); }
             .risk-safe .risk-title h2 { color: var(--safe-text); }
             .risk-caution .risk-title h2 { color: var(--caution-text); }
+            .risk-warning .risk-title h2 { color: var(--warning-text); }
             .risk-danger .risk-title h2 { color: var(--danger-text); }
-            .risk-severe .risk-title h2 { color: var(--severe-text); }
-            .risk-stop .risk-title h2 { color: var(--stop-text); }
             .risk-safe .risk-margin strong { color: var(--safe-text); }
             .risk-caution .risk-margin strong { color: var(--caution-text); }
+            .risk-warning .risk-margin strong { color: var(--warning-text); }
             .risk-danger .risk-margin strong { color: var(--danger-text); }
-            .risk-severe .risk-margin strong { color: var(--severe-text); }
-            .risk-stop .risk-margin strong { color: var(--stop-text); }
             .action-heading {
                 color: var(--muted);
                 font-size: 0.88rem;
@@ -431,7 +422,7 @@ def apply_styles():
                 background: #ffffff;
                 border: 1px solid #fecaca;
                 border-radius: 999px;
-                color: var(--stop);
+                color: var(--danger);
                 display: inline-flex;
                 flex: 0 0 auto;
                 font-size: 0.72rem;

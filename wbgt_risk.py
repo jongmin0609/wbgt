@@ -65,11 +65,9 @@ def classify_heat_risk_by_niosh(
     elif margin >= 0:
         risk = "주의"
     elif margin >= -2.0:
-        risk = "위험"
-    elif margin >= -4.0:
-        risk = "매우 위험"
+        risk = "경고"
     else:
-        risk = "즉시 작업중지"
+        risk = "위험"
 
     return {
         "risk": risk,

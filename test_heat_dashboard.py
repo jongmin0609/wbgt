@@ -60,12 +60,12 @@ class MetabolismTests(unittest.TestCase):
 
 
 class HeatRiskTests(unittest.TestCase):
-    def test_example_measurement_is_high_workload_and_very_dangerous(self):
+    def test_example_measurement_is_high_workload_and_dangerous(self):
         result = calculate_heat_risk(wbgt=31.2, kcal_min=10.97)
 
         self.assertEqual(result["workload"], "매우 고강도")
         self.assertEqual(result["limit_type"], "REL")
-        self.assertEqual(result["risk"], "즉시 작업중지")
+        self.assertEqual(result["risk"], "위험")
         self.assertLess(result["margin"], -4.0)
 
     def test_unacclimatized_workers_use_more_restrictive_ral(self):
@@ -80,9 +80,9 @@ class HeatRiskTests(unittest.TestCase):
     def test_risk_thresholds_cover_dashboard_labels(self):
         self.assertEqual(calculate_heat_risk(wbgt=29.5, kcal_min=2)["risk"], "안전")
         self.assertEqual(calculate_heat_risk(wbgt=30.5, kcal_min=2)["risk"], "주의")
-        self.assertEqual(calculate_heat_risk(wbgt=33.0, kcal_min=2)["risk"], "위험")
-        self.assertEqual(calculate_heat_risk(wbgt=35.0, kcal_min=2)["risk"], "매우 위험")
-        self.assertEqual(calculate_heat_risk(wbgt=37.0, kcal_min=2)["risk"], "즉시 작업중지")
+        self.assertEqual(calculate_heat_risk(wbgt=33.0, kcal_min=2)["risk"], "경고")
+        self.assertEqual(calculate_heat_risk(wbgt=35.0, kcal_min=2)["risk"], "위험")
+        self.assertEqual(calculate_heat_risk(wbgt=37.0, kcal_min=2)["risk"], "위험")
 
     def test_workload_thresholds_are_reported_from_metabolic_watts(self):
         self.assertEqual(calculate_heat_risk(wbgt=28, kcal_min=2)["workload"], "저강도")
@@ -100,7 +100,7 @@ class HeatRiskTests(unittest.TestCase):
 
 class GuidanceTests(unittest.TestCase):
     def test_every_risk_label_has_rest_action_water_control_and_tone(self):
-        for risk in ("안전", "주의", "위험", "매우 위험", "즉시 작업중지"):
+        for risk in ("안전", "주의", "경고", "위험"):
             with self.subTest(risk=risk):
                 guidance = get_risk_guidance(risk)
 
@@ -116,7 +116,7 @@ class GuidanceTests(unittest.TestCase):
 
     def test_guidance_keeps_context_notes_separate_from_response_items(self):
         guidance = get_risk_guidance(
-            risk="위험",
+            risk="경고",
             margin=-1.5,
             workload="고강도",
             acclimatized=False,
@@ -139,9 +139,8 @@ class GuidanceTests(unittest.TestCase):
     def test_manager_alert_starts_at_danger_level(self):
         self.assertFalse(should_trigger_alert("안전"))
         self.assertFalse(should_trigger_alert("주의"))
+        self.assertTrue(should_trigger_alert("경고"))
         self.assertTrue(should_trigger_alert("위험"))
-        self.assertTrue(should_trigger_alert("매우 위험"))
-        self.assertTrue(should_trigger_alert("즉시 작업중지"))
 
 
 class AcclimatizationTests(unittest.TestCase):
@@ -288,11 +287,11 @@ class MeasurementStoreTests(unittest.TestCase):
         self.assertGreater(male_kcal, female_kcal)
         self.assertEqual(
             calculate_heat_risk(wbgt=28, kcal_min=male_kcal)["risk"],
-            "즉시 작업중지",
+            "위험",
         )
         self.assertEqual(
             calculate_heat_risk(wbgt=28, kcal_min=female_kcal)["risk"],
-            "매우 위험",
+            "위험",
         )
 
 

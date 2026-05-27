@@ -229,6 +229,14 @@ st.markdown(
             --line: #d7dee7;
             --surface: #ffffff;
             --canvas: #f4f7f9;
+            --safe: #84cc16;
+            --safe-text: #3f6212;
+            --caution: #facc15;
+            --caution-text: #854d0e;
+            --warning: #f97316;
+            --warning-text: #9a3412;
+            --danger: #dc2626;
+            --danger-text: #991b1b;
         }
         .stApp {
             background: var(--canvas);
@@ -389,39 +397,32 @@ st.markdown(
             padding: 0.35rem 0.58rem;
         }
         .risk-safe {
-            border-left-color: #137a45;
+            border-left-color: var(--safe);
         }
         .risk-safe .risk-badge {
-            background: #e7f6ed;
-            color: #137a45;
+            background: #ecfccb;
+            color: var(--safe-text);
         }
         .risk-caution {
-            border-left-color: #9b6400;
+            border-left-color: var(--caution);
         }
         .risk-caution .risk-badge {
-            background: #fff2d8;
-            color: #8b5800;
+            background: #fef9c3;
+            color: var(--caution-text);
+        }
+        .risk-warning {
+            border-left-color: var(--warning);
+        }
+        .risk-warning .risk-badge {
+            background: #ffedd5;
+            color: var(--warning-text);
         }
         .risk-danger {
-            border-left-color: #c2410c;
+            border-left-color: var(--danger);
         }
         .risk-danger .risk-badge {
-            background: #ffe7db;
-            color: #b53b0b;
-        }
-        .risk-severe {
-            border-left-color: #b42318;
-        }
-        .risk-severe .risk-badge {
-            background: #fee4e2;
-            color: #b42318;
-        }
-        .risk-stop {
-            border-left-color: #7a271a;
-        }
-        .risk-stop .risk-badge {
-            background: #fecdca;
-            color: #7a271a;
+            background: #fee2e2;
+            color: var(--danger-text);
         }
         .metric-grid, .detail-grid {
             display: grid;
