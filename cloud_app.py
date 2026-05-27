@@ -27,7 +27,7 @@ def sex_label(sex):
 
 def format_updated_at(updated_at):
     if not updated_at:
-        return "아직 저장된 시각이 없습니다."
+        return "저장된 외부 측정값 없음"
 
     try:
         return datetime.fromisoformat(updated_at).strftime("%Y-%m-%d %H:%M:%S")
@@ -42,166 +42,6 @@ def metric_card(label, value, unit, tone="neutral"):
         f"<strong>{escape(str(value))}</strong>"
         f"<span>{escape(unit)}</span>"
         "</article>"
-    )
-
-
-def render_device_alert_controls(risk, manager_alert, heart_rate, wbgt, updated_at):
-    payload = {
-        "risk": risk,
-        "managerAlert": manager_alert,
-        "heartRate": heart_rate,
-        "wbgt": wbgt,
-        "updatedAt": updated_at or "no-time",
-        "key": f"{updated_at or 'no-time'}-{risk}-{heart_rate}-{wbgt}",
-    }
-    payload_json = json.dumps(payload, ensure_ascii=False)
-
-    components.html(
-        f"""
-        <div id="alert-root"></div>
-        <script>
-        const payload = {payload_json};
-        const root = document.getElementById("alert-root");
-        const enabledKey = "wgbt-device-alert-enabled";
-        const lastAlertKey = "wgbt-last-alert-key";
-
-        function readStorage(key) {{
-            try {{ return window.localStorage.getItem(key); }}
-            catch (_) {{ return null; }}
-        }}
-
-        function writeStorage(key, value) {{
-            try {{ window.localStorage.setItem(key, value); }}
-            catch (_) {{}}
-        }}
-
-        function notificationsSupported() {{
-            return "Notification" in window && window.isSecureContext;
-        }}
-
-        function vibrate(pattern) {{
-            if ("vibrate" in navigator) {{
-                try {{ navigator.vibrate(pattern); }} catch (_) {{}}
-            }}
-        }}
-
-        function playAlertSound() {{
-            try {{
-                const AudioContext = window.AudioContext || window.webkitAudioContext;
-                if (!AudioContext) return;
-                const context = new AudioContext();
-                const gain = context.createGain();
-                gain.gain.setValueAtTime(0.0001, context.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.22, context.currentTime + 0.03);
-                gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.95);
-                gain.connect(context.destination);
-                [0, 0.28, 0.56].forEach((offset) => {{
-                    const oscillator = context.createOscillator();
-                    oscillator.type = "sine";
-                    oscillator.frequency.setValueAtTime(880, context.currentTime + offset);
-                    oscillator.connect(gain);
-                    oscillator.start(context.currentTime + offset);
-                    oscillator.stop(context.currentTime + offset + 0.18);
-                }});
-            }} catch (_) {{}}
-        }}
-
-        function sendBrowserNotification() {{
-            if (!notificationsSupported() || Notification.permission !== "granted") return;
-            try {{
-                new Notification("온열 위험도 알람", {{
-                    body: `${{payload.risk}} 단계입니다. 심박수 ${{payload.heartRate}} bpm, WBGT ${{Number(payload.wbgt).toFixed(1)}}`,
-                    tag: "wgbt-risk-alert",
-                    renotify: true,
-                }});
-            }} catch (_) {{}}
-        }}
-
-        async function enableAlerts() {{
-            writeStorage(enabledKey, "true");
-            if (notificationsSupported() && Notification.permission === "default") {{
-                try {{ await Notification.requestPermission(); }} catch (_) {{}}
-            }}
-            vibrate([80]);
-            playAlertSound();
-            render();
-            maybeTriggerAlert(true);
-        }}
-
-        function maybeTriggerAlert(force=false) {{
-            const enabled = readStorage(enabledKey) === "true";
-            if (!payload.managerAlert || !enabled) return;
-            const previousKey = readStorage(lastAlertKey);
-            if (!force && previousKey === payload.key) return;
-            writeStorage(lastAlertKey, payload.key);
-            vibrate([450, 160, 450, 160, 450]);
-            playAlertSound();
-            sendBrowserNotification();
-        }}
-
-        function statusText() {{
-            const enabled = readStorage(enabledKey) === "true";
-            if (!enabled) return "알림을 받으려면 휴대폰에서 한 번 활성화하세요.";
-            if (!notificationsSupported()) return "소리와 진동 알림 활성화됨 · OS 푸시는 HTTPS에서만 가능";
-            if (Notification.permission === "granted") return "브라우저 알림, 소리, 진동 활성화됨";
-            if (Notification.permission === "denied") return "브라우저 알림 차단됨 · 소리와 진동만 시도";
-            return "소리와 진동 활성화됨 · 브라우저 알림 권한 대기";
-        }}
-
-        function render() {{
-            const enabled = readStorage(enabledKey) === "true";
-            const riskMessage = payload.managerAlert
-                ? `${{payload.risk}} 단계 감지됨`
-                : "위험 이상 단계가 아니면 알림을 울리지 않습니다.";
-            root.innerHTML = `
-                <style>
-                    body {{ margin: 0; font-family: sans-serif; }}
-                    .device-alert {{
-                        background: ${{payload.managerAlert ? "#fff1f0" : "#ffffff"}};
-                        border: 1px solid ${{payload.managerAlert ? "#b42318" : "#d7dee7"}};
-                        border-radius: 8px;
-                        box-sizing: border-box;
-                        color: #101828;
-                        padding: 12px 14px;
-                    }}
-                    .device-alert p {{ color: #526070; font-size: 13px; margin: 0 0 8px; }}
-                    .device-alert strong {{
-                        color: ${{payload.managerAlert ? "#7a271a" : "#101828"}};
-                        display: block;
-                        font-size: 15px;
-                        line-height: 1.4;
-                        margin-bottom: 10px;
-                    }}
-                    .device-alert button {{
-                        background: #101828;
-                        border: 0;
-                        border-radius: 6px;
-                        color: white;
-                        cursor: pointer;
-                        font-size: 14px;
-                        font-weight: 700;
-                        min-height: 40px;
-                        padding: 0 14px;
-                        width: 100%;
-                    }}
-                    .device-alert button.enabled {{ background: #137a45; }}
-                </style>
-                <section class="device-alert" aria-live="polite">
-                    <p>휴대폰 알림 상태</p>
-                    <strong>${{riskMessage}} · ${{statusText()}}</strong>
-                    <button id="enable-alerts" class="${{enabled ? "enabled" : ""}}">
-                        ${{enabled ? "알림 활성화됨" : "알림 활성화"}}
-                    </button>
-                </section>
-            `;
-            document.getElementById("enable-alerts").addEventListener("click", enableAlerts);
-        }}
-
-        render();
-        maybeTriggerAlert(false);
-        </script>
-        """,
-        height=132,
     )
 
 
@@ -419,6 +259,166 @@ def apply_styles():
     )
 
 
+def render_device_alert_controls(risk, manager_alert, heart_rate, wbgt, updated_at):
+    payload = {
+        "risk": risk,
+        "managerAlert": manager_alert,
+        "heartRate": heart_rate,
+        "wbgt": wbgt,
+        "updatedAt": updated_at or "no-time",
+        "key": f"{updated_at or 'no-time'}-{risk}-{heart_rate}-{wbgt}",
+    }
+    payload_json = json.dumps(payload, ensure_ascii=False)
+
+    components.html(
+        f"""
+        <div id="alert-root"></div>
+        <script>
+        const payload = {payload_json};
+        const root = document.getElementById("alert-root");
+        const enabledKey = "wgbt-device-alert-enabled";
+        const lastAlertKey = "wgbt-last-alert-key";
+
+        function readStorage(key) {{
+            try {{ return window.localStorage.getItem(key); }}
+            catch (_) {{ return null; }}
+        }}
+
+        function writeStorage(key, value) {{
+            try {{ window.localStorage.setItem(key, value); }}
+            catch (_) {{}}
+        }}
+
+        function notificationsSupported() {{
+            return "Notification" in window && window.isSecureContext;
+        }}
+
+        function vibrate(pattern) {{
+            if ("vibrate" in navigator) {{
+                try {{ navigator.vibrate(pattern); }} catch (_) {{}}
+            }}
+        }}
+
+        function playAlertSound() {{
+            try {{
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (!AudioContext) return;
+                const context = new AudioContext();
+                const gain = context.createGain();
+                gain.gain.setValueAtTime(0.0001, context.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.22, context.currentTime + 0.03);
+                gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.95);
+                gain.connect(context.destination);
+                [0, 0.28, 0.56].forEach((offset) => {{
+                    const oscillator = context.createOscillator();
+                    oscillator.type = "sine";
+                    oscillator.frequency.setValueAtTime(880, context.currentTime + offset);
+                    oscillator.connect(gain);
+                    oscillator.start(context.currentTime + offset);
+                    oscillator.stop(context.currentTime + offset + 0.18);
+                }});
+            }} catch (_) {{}}
+        }}
+
+        function sendBrowserNotification() {{
+            if (!notificationsSupported() || Notification.permission !== "granted") return;
+            try {{
+                new Notification("온열 위험도 알람", {{
+                    body: `${{payload.risk}} 단계입니다. 심박수 ${{payload.heartRate}} bpm, WBGT ${{Number(payload.wbgt).toFixed(1)}}`,
+                    tag: "wgbt-risk-alert",
+                    renotify: true,
+                }});
+            }} catch (_) {{}}
+        }}
+
+        async function enableAlerts() {{
+            writeStorage(enabledKey, "true");
+            if (notificationsSupported() && Notification.permission === "default") {{
+                try {{ await Notification.requestPermission(); }} catch (_) {{}}
+            }}
+            vibrate([80]);
+            playAlertSound();
+            render();
+            maybeTriggerAlert(true);
+        }}
+
+        function maybeTriggerAlert(force=false) {{
+            const enabled = readStorage(enabledKey) === "true";
+            if (!payload.managerAlert || !enabled) return;
+            const previousKey = readStorage(lastAlertKey);
+            if (!force && previousKey === payload.key) return;
+            writeStorage(lastAlertKey, payload.key);
+            vibrate([450, 160, 450, 160, 450]);
+            playAlertSound();
+            sendBrowserNotification();
+        }}
+
+        function statusText() {{
+            const enabled = readStorage(enabledKey) === "true";
+            if (!enabled) return "알림을 받으려면 휴대폰에서 한 번 활성화하세요.";
+            if (!notificationsSupported()) return "소리와 진동 알림 활성화됨 · OS 푸시는 HTTPS에서만 가능";
+            if (Notification.permission === "granted") return "브라우저 알림, 소리, 진동 활성화됨";
+            if (Notification.permission === "denied") return "브라우저 알림 차단됨 · 소리와 진동만 시도";
+            return "소리와 진동 활성화됨 · 브라우저 알림 권한 대기";
+        }}
+
+        function render() {{
+            const enabled = readStorage(enabledKey) === "true";
+            const riskMessage = payload.managerAlert
+                ? `${{payload.risk}} 단계 감지됨`
+                : "위험 이상 단계가 아니면 알림을 울리지 않습니다.";
+            root.innerHTML = `
+                <style>
+                    body {{ margin: 0; font-family: sans-serif; }}
+                    .device-alert {{
+                        background: ${{payload.managerAlert ? "#fff1f0" : "#ffffff"}};
+                        border: 1px solid ${{payload.managerAlert ? "#b42318" : "#d7dee7"}};
+                        border-radius: 8px;
+                        box-sizing: border-box;
+                        color: #101828;
+                        padding: 12px 14px;
+                    }}
+                    .device-alert p {{ color: #526070; font-size: 13px; margin: 0 0 8px; }}
+                    .device-alert strong {{
+                        color: ${{payload.managerAlert ? "#7a271a" : "#101828"}};
+                        display: block;
+                        font-size: 15px;
+                        line-height: 1.4;
+                        margin-bottom: 10px;
+                    }}
+                    .device-alert button {{
+                        background: #101828;
+                        border: 0;
+                        border-radius: 6px;
+                        color: white;
+                        cursor: pointer;
+                        font-size: 14px;
+                        font-weight: 700;
+                        min-height: 40px;
+                        padding: 0 14px;
+                        width: 100%;
+                    }}
+                    .device-alert button.enabled {{ background: #137a45; }}
+                </style>
+                <section class="device-alert" aria-live="polite">
+                    <p>휴대폰 알림 상태</p>
+                    <strong>${{riskMessage}} · ${{statusText()}}</strong>
+                    <button id="enable-alerts" class="${{enabled ? "enabled" : ""}}">
+                        ${{enabled ? "알림 활성화됨" : "알림 활성화"}}
+                    </button>
+                </section>
+            `;
+            document.getElementById("enable-alerts").addEventListener("click", enableAlerts);
+        }}
+
+        render();
+        maybeTriggerAlert(false);
+        </script>
+        """,
+        height=132,
+    )
+
+
 def measurement_status(measurement):
     updated_at = measurement.get("updated_at")
     if measurement.get("source") == "computer":
@@ -432,13 +432,66 @@ def measurement_status(measurement):
     return "기본 데이터", "저장된 외부 측정값 없음"
 
 
+def calculate_dashboard_values(measurement):
+    heart_rate = measurement["heart_rate"]
+    wbgt = measurement["wbgt"]
+    age = measurement["age"]
+    weight = measurement["weight"]
+    sex = measurement["sex"]
+    resting_hr = 65
+    acclimatized = True
+    clothing_adjustment = 0.0
+
+    vo2, hrr_ratio, hr_max = estimate_vo2_by_hrr(
+        age=age,
+        sex=sex,
+        heart_rate=heart_rate,
+        resting_hr=resting_hr,
+    )
+    kcal_from_vo2 = calculate_calories_from_vo2(vo2, weight)
+    kcal = calculate_energy_keytel(
+        heart_rate=heart_rate,
+        weight=weight,
+        age=age,
+        sex=sex,
+    )
+    risk_result = calculate_heat_risk(
+        wbgt=wbgt,
+        kcal_min=kcal,
+        acclimatized=acclimatized,
+        clothing_adjustment=clothing_adjustment,
+    )
+    guidance = get_risk_guidance(risk_result["risk"])
+
+    return {
+        "heart_rate": heart_rate,
+        "wbgt": wbgt,
+        "age": age,
+        "weight": weight,
+        "sex": sex,
+        "vo2": vo2,
+        "hrr_ratio": hrr_ratio,
+        "hr_max": hr_max,
+        "kcal_from_vo2": kcal_from_vo2,
+        "kcal": kcal,
+        "risk": risk_result["risk"],
+        "workload": risk_result["workload"],
+        "metabolic_watts": risk_result["metabolic_watts"],
+        "limit_wbgt": risk_result["limit_wbgt"],
+        "adjusted_wbgt": risk_result["adjusted_wbgt"],
+        "margin": risk_result["margin"],
+        "guidance": guidance,
+        "manager_alert": should_trigger_alert(risk_result["risk"]),
+    }
+
+
 def render_dashboard():
     st.markdown(
         """
         <header class="page-head">
             <p>현장 관리자 대시보드</p>
             <h1>온열 위험도</h1>
-            <span>입력 페이지나 센서 입력기가 보낸 단일 작업자 값으로 위험 단계와 휴식 권고를 확인합니다.</span>
+            <span>PC 입력 탭에서 보낸 단일 작업자 값으로 위험 단계와 휴식 권고를 확인합니다.</span>
         </header>
         """,
         unsafe_allow_html=True,
@@ -447,70 +500,32 @@ def render_dashboard():
     @st.experimental_fragment(run_every=2)
     def render_live_dashboard():
         measurement = read_measurement()
-        heart_rate = measurement["heart_rate"]
-        wbgt = measurement["wbgt"]
-        age = measurement["age"]
-        weight = measurement["weight"]
-        sex = measurement["sex"]
         status_title, status_detail = measurement_status(measurement)
 
         try:
-            resting_hr = 65
-acclimatized = True
-clothing_adjustment = 0.0
-
-vo2, hrr_ratio, hr_max = estimate_vo2_by_hrr(
-    age=age,
-    sex=sex,
-    heart_rate=heart_rate,
-    resting_hr=resting_hr,
-)
-
-kcal_from_vo2 = calculate_calories_from_vo2(vo2, weight)
-
-kcal = calculate_energy_keytel(
-    heart_rate=heart_rate,
-    weight=weight,
-    age=age,
-    sex=sex,
-)
-
-risk_result = calculate_heat_risk(
-    wbgt=wbgt,
-    kcal_min=kcal,
-    acclimatized=acclimatized,
-    clothing_adjustment=clothing_adjustment,
-)
-
-risk = risk_result["risk"]
-workload = risk_result["workload"]
-metabolic_watts = risk_result["metabolic_watts"]
-limit_wbgt = risk_result["limit_wbgt"]
-adjusted_wbgt = risk_result["adjusted_wbgt"]
-margin = risk_result["margin"]
-            guidance = get_risk_guidance(risk)
-            manager_alert = should_trigger_alert(risk)
+            values = calculate_dashboard_values(measurement)
         except ValueError as error:
             st.error(str(error))
             return
 
         render_device_alert_controls(
-            risk=risk,
-            manager_alert=manager_alert,
-            heart_rate=heart_rate,
-            wbgt=wbgt,
+            risk=values["risk"],
+            manager_alert=values["manager_alert"],
+            heart_rate=values["heart_rate"],
+            wbgt=values["wbgt"],
             updated_at=measurement.get("updated_at"),
         )
 
         alert_markup = ""
-        if manager_alert:
+        if values["manager_alert"]:
             alert_markup = f"""
             <section class="manager-alert" data-testid="manager-alert" role="alert" aria-live="assertive">
                 <p>작업관리자 알람</p>
-                <strong>{escape(risk)} 단계입니다. 즉시 작업자 상태를 확인하고 휴식 조치를 지시하세요.</strong>
+                <strong>{escape(values["risk"])} 단계입니다. 즉시 작업자 상태를 확인하고 휴식 조치를 지시하세요.</strong>
             </section>
             """
 
+        guidance = values["guidance"]
         st.markdown(
             f"""
             <section class="feed-status" data-testid="feed-status">
@@ -521,7 +536,7 @@ margin = risk_result["margin"]
             <section class="risk-panel risk-{escape(guidance["tone"])}" data-testid="risk-panel">
                 <p>현재 위험도 단계</p>
                 <div class="risk-title">
-                    <h2>{escape(risk)}</h2>
+                    <h2>{escape(values["risk"])}</h2>
                     <span class="risk-badge">WBGT 판정</span>
                 </div>
                 <div class="risk-rest">
@@ -531,26 +546,42 @@ margin = risk_result["margin"]
                 <strong>{escape(guidance["action_text"])}</strong>
             </section>
             <section class="metric-grid" data-testid="primary-metrics">
-                {metric_card("현재 심박수", heart_rate, "bpm", "heart")}
-                {metric_card("온열지수 (WBGT)", f"{wbgt:.1f}", "WBGT", "wbgt")}
+                {metric_card("현재 심박수", values["heart_rate"], "bpm", "heart")}
+                {metric_card("온열지수 (WBGT)", f"{values["wbgt"]:.1f}", "WBGT", "wbgt")}
                 {metric_card("권장 휴식 시간", guidance["rest_time"], "참고 권고")}
             </section>
             <section class="detail-grid" data-testid="calculation-details">
                 <article class="detail-card">
                     <p>작업강도</p>
-                    <strong>{escape(workload)}</strong>
+                    <strong>{escape(values["workload"])}</strong>
                 </article>
                 <article class="detail-card">
                     <p>VO2 추정값</p>
-                    <strong>{vo2:.2f} ml/kg/min</strong>
+                    <strong>{values["vo2"]:.2f} ml/kg/min</strong>
                 </article>
                 <article class="detail-card">
-                    <p>추정 칼로리 소모량</p>
-                    <strong>{kcal:.2f} kcal/min</strong>
+                    <p>Keytel 기반 칼로리 소모량</p>
+                    <strong>{values["kcal"]:.2f} kcal/min</strong>
+                </article>
+                <article class="detail-card">
+                    <p>대사율</p>
+                    <strong>{values["metabolic_watts"]:.0f} W</strong>
+                </article>
+                <article class="detail-card">
+                    <p>NIOSH 기준 WBGT</p>
+                    <strong>{values["limit_wbgt"]:.1f} ℃</strong>
+                </article>
+                <article class="detail-card">
+                    <p>기준 여유</p>
+                    <strong>{values["margin"]:.1f} ℃</strong>
                 </article>
                 <article class="detail-card">
                     <p>입력 프로필</p>
-                    <strong>{age}세 / {weight:g}kg / {sex_label(sex)}</strong>
+                    <strong>{values["age"]}세 / {values["weight"]:g}kg / {sex_label(values["sex"])}</strong>
+                </article>
+                <article class="detail-card">
+                    <p>적용 조건</p>
+                    <strong>순화 작업자 / 보정 WBGT {values["adjusted_wbgt"]:.1f}℃</strong>
                 </article>
             </section>
             <aside class="notice">
@@ -571,9 +602,9 @@ def render_input_page():
     st.markdown(
         f"""
         <header class="page-head">
-            <p>입력 페이지</p>
+            <p>PC 입력</p>
             <h1>측정값 전송</h1>
-            <span>심박수, WBGT, 프로필을 저장하면 같은 HTTPS 앱의 대시보드가 자동으로 갱신됩니다.</span>
+            <span>심박수, WBGT, 프로필을 저장하면 휴대폰 대시보드 탭이 약 2초마다 다시 읽습니다.</span>
         </header>
         <section class="feed-status" data-testid="input-status">
             <strong>최근 저장</strong>

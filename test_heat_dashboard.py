@@ -8,57 +8,83 @@ from measurement_store import (
     validate_profile,
     write_measurement,
 )
-from metabolism import calculate_calories, estimate_vo2
+from metabolism import (
+    calculate_calories_from_vo2,
+    calculate_energy_keytel,
+    estimate_vo2_by_hrr,
+)
 from utils import RISK_GUIDANCE, get_risk_guidance, should_trigger_alert
 from wbgt_risk import calculate_heat_risk
 
 
 class MetabolismTests(unittest.TestCase):
     def test_example_profile_produces_expected_vo2_and_calories(self):
-        vo2 = estimate_vo2(age=25, sex="male", hr=130)
+        vo2, hrr_ratio, hr_max = estimate_vo2_by_hrr(
+            age=25,
+            sex="male",
+            heart_rate=130,
+        )
 
-        self.assertAlmostEqual(vo2, 30.0)
-        self.assertAlmostEqual(calculate_calories(vo2, weight=70), 10.5)
+        self.assertAlmostEqual(vo2, 23.44, places=2)
+        self.assertAlmostEqual(hrr_ratio, 0.52, places=2)
+        self.assertAlmostEqual(hr_max, 190.5)
+        self.assertAlmostEqual(calculate_calories_from_vo2(vo2, weight=70), 8.20, places=2)
+        self.assertAlmostEqual(
+            calculate_energy_keytel(
+                heart_rate=130,
+                weight=70,
+                age=25,
+                sex="male",
+            ),
+            10.97,
+            places=2,
+        )
 
     def test_profile_and_heart_rate_validation(self):
         with self.assertRaisesRegex(ValueError, "나이는"):
-            estimate_vo2(age=0, sex="male", hr=130)
+            estimate_vo2_by_hrr(age=0, sex="male", heart_rate=130)
 
         with self.assertRaisesRegex(ValueError, "심박수는"):
-            estimate_vo2(age=25, sex="male", hr=0)
+            estimate_vo2_by_hrr(age=25, sex="male", heart_rate=0)
 
         with self.assertRaisesRegex(ValueError, "비정상적으로"):
-            estimate_vo2(age=25, sex="male", hr=216)
+            estimate_vo2_by_hrr(age=25, sex="male", heart_rate=216)
 
         with self.assertRaisesRegex(ValueError, "성별은"):
-            estimate_vo2(age=25, sex="unknown", hr=130)
+            estimate_vo2_by_hrr(age=25, sex="unknown", heart_rate=130)
 
     def test_weight_validation(self):
         with self.assertRaisesRegex(ValueError, "체중은"):
-            calculate_calories(vo2=30, weight=0)
+            calculate_calories_from_vo2(vo2=30, weight=0)
 
 
 class HeatRiskTests(unittest.TestCase):
     def test_example_measurement_is_high_workload_and_very_dangerous(self):
-        risk, workload = calculate_heat_risk(wbgt=31.2, kcal=10.5)
+        result = calculate_heat_risk(wbgt=31.2, kcal_min=10.97)
 
-        self.assertEqual(workload, "고강도")
-        self.assertEqual(risk, "매우 위험")
+        self.assertEqual(result["workload"], "매우 고강도")
+        self.assertEqual(result["risk"], "즉시 작업중지")
+        self.assertLess(result["margin"], -4.0)
 
     def test_risk_thresholds_cover_dashboard_labels(self):
-        self.assertEqual(calculate_heat_risk(wbgt=27.9, kcal=2), ("안전", "저강도"))
-        self.assertEqual(calculate_heat_risk(wbgt=28, kcal=2), ("주의", "저강도"))
-        self.assertEqual(calculate_heat_risk(wbgt=28, kcal=6), ("위험", "고강도"))
-        self.assertEqual(calculate_heat_risk(wbgt=31, kcal=2), ("위험", "저강도"))
-        self.assertEqual(calculate_heat_risk(wbgt=31, kcal=6), ("매우 위험", "고강도"))
-        self.assertEqual(calculate_heat_risk(wbgt=33, kcal=6), ("즉시 작업중지", "고강도"))
+        self.assertEqual(calculate_heat_risk(wbgt=29.5, kcal_min=2)["risk"], "안전")
+        self.assertEqual(calculate_heat_risk(wbgt=30.5, kcal_min=2)["risk"], "주의")
+        self.assertEqual(calculate_heat_risk(wbgt=33.0, kcal_min=2)["risk"], "위험")
+        self.assertEqual(calculate_heat_risk(wbgt=35.0, kcal_min=2)["risk"], "매우 위험")
+        self.assertEqual(calculate_heat_risk(wbgt=37.0, kcal_min=2)["risk"], "즉시 작업중지")
+
+    def test_workload_thresholds_are_reported_from_metabolic_watts(self):
+        self.assertEqual(calculate_heat_risk(wbgt=28, kcal_min=2)["workload"], "저강도")
+        self.assertEqual(calculate_heat_risk(wbgt=28, kcal_min=3.5)["workload"], "중강도")
+        self.assertEqual(calculate_heat_risk(wbgt=28, kcal_min=5)["workload"], "고강도")
+        self.assertEqual(calculate_heat_risk(wbgt=28, kcal_min=6)["workload"], "매우 고강도")
 
     def test_heat_risk_rejects_invalid_inputs(self):
         with self.assertRaisesRegex(ValueError, "WBGT"):
-            calculate_heat_risk(wbgt=61, kcal=2)
+            calculate_heat_risk(wbgt=61, kcal_min=2)
 
         with self.assertRaisesRegex(ValueError, "칼로리"):
-            calculate_heat_risk(wbgt=30, kcal=-1)
+            calculate_heat_risk(wbgt=30, kcal_min=-1)
 
 
 class GuidanceTests(unittest.TestCase):
@@ -146,13 +172,28 @@ class MeasurementStoreTests(unittest.TestCase):
             validate_profile(25, 70, "unknown")
 
     def test_changed_profile_changes_heat_risk_calculation_inputs(self):
-        high_vo2 = estimate_vo2(age=25, sex="male", hr=130)
-        lower_vo2 = estimate_vo2(age=25, sex="female", hr=130)
-        high_kcal = calculate_calories(high_vo2, weight=70)
-        lower_kcal = calculate_calories(lower_vo2, weight=40)
+        male_kcal = calculate_energy_keytel(
+            heart_rate=130,
+            weight=70,
+            age=25,
+            sex="male",
+        )
+        female_kcal = calculate_energy_keytel(
+            heart_rate=130,
+            weight=40,
+            age=25,
+            sex="female",
+        )
 
-        self.assertEqual(calculate_heat_risk(wbgt=31, kcal=high_kcal), ("매우 위험", "고강도"))
-        self.assertEqual(calculate_heat_risk(wbgt=31, kcal=lower_kcal), ("위험", "중강도"))
+        self.assertGreater(male_kcal, female_kcal)
+        self.assertEqual(
+            calculate_heat_risk(wbgt=28, kcal_min=male_kcal)["risk"],
+            "즉시 작업중지",
+        )
+        self.assertEqual(
+            calculate_heat_risk(wbgt=28, kcal_min=female_kcal)["risk"],
+            "매우 위험",
+        )
 
 
 if __name__ == "__main__":
