@@ -50,8 +50,12 @@ def metric_card(label, value, unit, tone="neutral", reference=None):
     )
 
 
-def risk_scale_position(margin):
+def risk_score_from_margin(margin):
     return max(0, min(100, ((4.0 - margin) / 10.0) * 100))
+
+
+def format_margin(margin):
+    return f"{margin:+.1f}"
 
 
 def risk_scale(position):
@@ -59,6 +63,10 @@ def risk_scale(position):
         '<div class="risk-scale" aria-hidden="true">'
         '<div class="risk-track"></div>'
         f'<span class="risk-marker" style="left: {position:.1f}%"></span>'
+        '<div class="risk-scale-labels">'
+        "<span><b>기준 여유 +4℃ 이상</b><small>위험 낮음</small></span>"
+        "<span><b>기준 여유 -6℃ 이하</b><small>위험 높음</small></span>"
+        "</div>"
         "</div>"
     )
 
@@ -220,6 +228,35 @@ def apply_styles():
                 line-height: 1.25;
                 margin: 0;
             }
+            .risk-header {
+                align-items: flex-start;
+                display: flex;
+                gap: 1rem;
+                justify-content: space-between;
+            }
+            .risk-margin {
+                min-width: 7.2rem;
+                text-align: right;
+            }
+            .risk-margin span {
+                color: var(--muted);
+                display: block;
+                font-size: 0.78rem;
+                font-weight: 700;
+                margin-bottom: 0.18rem;
+            }
+            .risk-margin strong {
+                color: var(--ink);
+                display: inline;
+                font-size: 2rem;
+                line-height: 1;
+            }
+            .risk-margin small {
+                color: var(--muted);
+                font-size: 0.82rem;
+                font-weight: 700;
+                margin-left: 0.12rem;
+            }
             .risk-badge {
                 border-radius: 999px;
                 border: 1px solid currentColor;
@@ -268,6 +305,24 @@ def apply_styles():
                 transform: translate(-50%, -50%);
                 width: 18px;
             }
+            .risk-scale-labels {
+                color: var(--muted);
+                display: flex;
+                font-size: 0.74rem;
+                justify-content: space-between;
+                line-height: 1.25;
+                margin-top: 0.46rem;
+            }
+            .risk-scale-labels span:last-child { text-align: right; }
+            .risk-scale-labels b {
+                color: #344054;
+                display: block;
+                font-size: 0.78rem;
+            }
+            .risk-scale-labels small {
+                display: block;
+                font-size: 0.72rem;
+            }
             .risk-rest {
                 align-items: center;
                 display: flex;
@@ -305,6 +360,11 @@ def apply_styles():
             .risk-danger .risk-title h2 { color: var(--danger); }
             .risk-severe .risk-title h2 { color: var(--severe); }
             .risk-stop .risk-title h2 { color: var(--stop); }
+            .risk-safe .risk-margin strong { color: var(--safe); }
+            .risk-caution .risk-margin strong { color: var(--caution); }
+            .risk-danger .risk-margin strong { color: var(--danger); }
+            .risk-severe .risk-margin strong { color: var(--severe); }
+            .risk-stop .risk-margin strong { color: var(--stop); }
             .action-heading {
                 color: var(--muted);
                 font-size: 0.88rem;
@@ -470,6 +530,13 @@ def apply_styles():
                 .metric-card { min-height: 96px; }
                 .metric-card strong { font-size: 1.65rem; }
                 .detail-row { grid-template-columns: 1fr; }
+                .risk-header { align-items: flex-start; }
+                .risk-margin { min-width: 5.8rem; }
+                .risk-margin strong { font-size: 1.7rem; }
+                .risk-scale-labels {
+                    font-size: 0.68rem;
+                    gap: 0.7rem;
+                }
             }
         </style>
         """,
@@ -699,7 +766,7 @@ def calculate_dashboard_values(measurement):
         "limit_wbgt": risk_result["limit_wbgt"],
         "adjusted_wbgt": risk_result["adjusted_wbgt"],
         "margin": risk_result["margin"],
-        "risk_position": risk_scale_position(risk_result["margin"]),
+        "risk_score": risk_score_from_margin(risk_result["margin"]),
         "acclimatization": acclimatization,
         "guidance": guidance,
         "manager_alert": should_trigger_alert(risk_result["risk"]),
@@ -731,11 +798,19 @@ def render_dashboard():
         st.markdown(
             f"""
             <section class="risk-panel risk-{escape(guidance["tone"])}" data-testid="risk-panel">
-                <p>현재 위험도 단계</p>
-                <div class="risk-title">
-                    <h2>{escape(values["risk"])}</h2>
+                <div class="risk-header">
+                    <div>
+                        <p>현재 위험도 단계</p>
+                        <div class="risk-title">
+                            <h2>{escape(values["risk"])}</h2>
+                        </div>
+                    </div>
+                    <div class="risk-margin" aria-label="기준 여유">
+                        <span>기준 여유</span>
+                        <strong>{format_margin(values["margin"])}</strong><small>℃</small>
+                    </div>
                 </div>
-                {risk_scale(values["risk_position"])}
+                {risk_scale(values["risk_score"])}
                 <p class="action-heading">권장 대처</p>
                 {action_checklist(guidance["action_items"])}
             </section>
