@@ -531,41 +531,42 @@ def render_live_dashboard():
 
     try:
         resting_hr = 65
-acclimatized = True
-clothing_adjustment = 0.0
+        acclimatized = True
+        clothing_adjustment = 0.0
 
-vo2, hrr_ratio, hr_max = estimate_vo2_by_hrr(
-    age=age,
-    sex=sex,
-    heart_rate=heart_rate,
-    resting_hr=resting_hr,
-)
+        vo2, hrr_ratio, hr_max = estimate_vo2_by_hrr(
+            age=age,
+            sex=sex,
+            heart_rate=heart_rate,
+            resting_hr=resting_hr,
+        )
 
-kcal_from_vo2 = calculate_calories_from_vo2(vo2, weight)
+        kcal_from_vo2 = calculate_calories_from_vo2(vo2, weight)
 
-kcal = calculate_energy_keytel(
-    heart_rate=heart_rate,
-    weight=weight,
-    age=age,
-    sex=sex,
-)
+        kcal = calculate_energy_keytel(
+            heart_rate=heart_rate,
+            weight=weight,
+            age=age,
+            sex=sex,
+        )
 
-risk_result = calculate_heat_risk(
-    wbgt=wbgt,
-    kcal_min=kcal,
-    acclimatized=acclimatized,
-    clothing_adjustment=clothing_adjustment,
-)
+        risk_result = calculate_heat_risk(
+            wbgt=wbgt,
+            kcal_min=kcal,
+            acclimatized=acclimatized,
+            clothing_adjustment=clothing_adjustment,
+        )
 
-risk = risk_result["risk"]
-workload = risk_result["workload"]
-metabolic_watts = risk_result["metabolic_watts"]
-limit_wbgt = risk_result["limit_wbgt"]
-adjusted_wbgt = risk_result["adjusted_wbgt"]
-margin = risk_result["margin"]
+        risk = risk_result["risk"]
+        workload = risk_result["workload"]
+        metabolic_watts = risk_result["metabolic_watts"]
+        limit_wbgt = risk_result["limit_wbgt"]
+        adjusted_wbgt = risk_result["adjusted_wbgt"]
+        margin = risk_result["margin"]
 
-guidance = get_risk_guidance(risk)
-manager_alert = should_trigger_alert(risk)
+        guidance = get_risk_guidance(risk)
+        manager_alert = should_trigger_alert(risk)
+
     except ValueError as error:
         st.error(str(error))
         return
@@ -613,37 +614,37 @@ manager_alert = should_trigger_alert(risk)
         </section>
         <section class="detail-grid" data-testid="calculation-details">
             <article class="detail-card">
-    <p>작업강도</p>
-    <strong>{escape(workload)}</strong>
-</article>
-<article class="detail-card">
-    <p>VO2 추정값</p>
-    <strong>{vo2:.2f} ml/kg/min</strong>
-</article>
-<article class="detail-card">
-    <p>Keytel 기반 칼로리 소모량</p>
-    <strong>{kcal:.2f} kcal/min</strong>
-</article>
-<article class="detail-card">
-    <p>대사율</p>
-    <strong>{metabolic_watts:.0f} W</strong>
-</article>
-<article class="detail-card">
-    <p>NIOSH 기준 WBGT</p>
-    <strong>{limit_wbgt:.1f} ℃</strong>
-</article>
-<article class="detail-card">
-    <p>기준 여유</p>
-    <strong>{margin:.1f} ℃</strong>
-</article>
-<article class="detail-card">
-    <p>입력 프로필</p>
-    <strong>{age}세 / {weight:g}kg / {sex_label(sex)}</strong>
-</article>
-<article class="detail-card">
-    <p>적용 조건</p>
-    <strong>순화 작업자 / 보정 WBGT {adjusted_wbgt:.1f}℃</strong>
-</article>
+                <p>작업강도</p>
+                <strong>{escape(workload)}</strong>
+            </article>
+            <article class="detail-card">
+                <p>VO2 추정값</p>
+                <strong>{vo2:.2f} ml/kg/min</strong>
+            </article>
+            <article class="detail-card">
+                <p>Keytel 기반 칼로리 소모량</p>
+                <strong>{kcal:.2f} kcal/min</strong>
+            </article>
+            <article class="detail-card">
+                <p>대사율</p>
+                <strong>{metabolic_watts:.0f} W</strong>
+            </article>
+            <article class="detail-card">
+                <p>NIOSH 기준 WBGT</p>
+                <strong>{limit_wbgt:.1f} ℃</strong>
+            </article>
+            <article class="detail-card">
+                <p>기준 여유</p>
+                <strong>{margin:.1f} ℃</strong>
+            </article>
+            <article class="detail-card">
+                <p>입력 프로필</p>
+                <strong>{age}세 / {weight:g}kg / {sex_label(sex)}</strong>
+            </article>
+            <article class="detail-card">
+                <p>적용 조건</p>
+                <strong>순화 작업자 / 보정 WBGT {adjusted_wbgt:.1f}℃</strong>
+            </article>
         </section>
         <aside class="notice">
             이 화면은 제공된 WBGT 예시 로직에 따른 참고 대시보드입니다.
