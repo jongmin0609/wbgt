@@ -36,13 +36,30 @@ def format_updated_at(updated_at):
         return str(updated_at)
 
 
-def metric_card(label, value, unit, tone="neutral"):
+def metric_card(label, value, unit, tone="neutral", reference=None):
+    reference_markup = ""
+    if reference:
+        reference_markup = f"<small>{escape(reference)}</small>"
+
     return (
         f'<article class="metric-card metric-{escape(tone)}">'
-        f"<p>{escape(label)}</p>"
+        f'<div class="metric-head"><p>{escape(label)}</p>{reference_markup}</div>'
         f"<strong>{escape(str(value))}</strong>"
         f"<span>{escape(unit)}</span>"
         "</article>"
+    )
+
+
+def risk_scale_position(margin):
+    return max(0, min(100, ((4.0 - margin) / 10.0) * 100))
+
+
+def risk_scale(position):
+    return (
+        '<div class="risk-scale" aria-hidden="true">'
+        '<div class="risk-track"></div>'
+        f'<span class="risk-marker" style="left: {position:.1f}%"></span>'
+        "</div>"
     )
 
 
@@ -50,7 +67,7 @@ def action_checklist(items):
     return (
         '<ul class="action-list">'
         + "".join(
-            f"<li><span>□</span><strong>{escape(item)}</strong></li>"
+            f'<li><span class="check-icon" aria-hidden="true">&#10003;</span><strong>{escape(item)}</strong></li>'
             for item in items
         )
         + "</ul>"
@@ -217,6 +234,40 @@ def apply_styles():
                 font-size: 1.05rem;
                 line-height: 1.55;
             }
+            .risk-scale {
+                margin: 0.7rem 0 0.95rem;
+                position: relative;
+            }
+            .risk-track {
+                background: linear-gradient(
+                    90deg,
+                    var(--safe) 0%,
+                    var(--safe) 20%,
+                    var(--caution) 20%,
+                    var(--caution) 40%,
+                    var(--danger) 40%,
+                    var(--danger) 60%,
+                    var(--severe) 60%,
+                    var(--severe) 80%,
+                    var(--stop) 80%,
+                    var(--stop) 100%
+                );
+                border-radius: 999px;
+                height: 10px;
+                opacity: 0.92;
+                width: 100%;
+            }
+            .risk-marker {
+                background: #ffffff;
+                border: 3px solid #101828;
+                border-radius: 999px;
+                box-shadow: 0 2px 8px rgba(16, 24, 40, 0.22);
+                height: 18px;
+                position: absolute;
+                top: 50%;
+                transform: translate(-50%, -50%);
+                width: 18px;
+            }
             .risk-rest {
                 align-items: center;
                 display: flex;
@@ -270,14 +321,28 @@ def apply_styles():
             .action-list li {
                 align-items: flex-start;
                 display: flex;
-                gap: 0.5rem;
+                gap: 0.62rem;
                 line-height: 1.45;
             }
-            .action-list li span {
-                color: var(--muted);
+            .action-list .check-icon {
+                align-items: center;
+                background: #ecfdf3;
+                border: 1px solid #abefc6;
+                border-radius: 999px;
+                color: var(--safe);
+                display: inline-flex;
                 flex: 0 0 auto;
+                font-size: 0.72rem;
                 font-weight: 700;
+                height: 1.16rem;
+                justify-content: center;
+                margin-top: 0.15rem;
+                width: 1.16rem;
             }
+            .risk-caution .check-icon { background: #fffaeb; border-color: #fedf89; color: var(--caution); }
+            .risk-danger .check-icon { background: #fff4ed; border-color: #fdb022; color: var(--danger); }
+            .risk-severe .check-icon { background: #fef3f2; border-color: #f97066; color: var(--severe); }
+            .risk-stop .check-icon { background: #fef3f2; border-color: #fecdca; color: var(--stop); }
             .action-list li strong {
                 color: var(--ink);
                 display: inline;
@@ -294,6 +359,21 @@ def apply_styles():
                 color: var(--muted);
                 font-size: 0.88rem;
                 margin: 0 0 0.42rem;
+            }
+            .metric-head {
+                align-items: baseline;
+                display: flex;
+                gap: 0.55rem;
+                justify-content: space-between;
+                min-height: 1.6rem;
+            }
+            .metric-head small {
+                color: var(--muted);
+                flex: 0 0 auto;
+                font-size: 0.76rem;
+                line-height: 1.2;
+                text-align: right;
+                white-space: nowrap;
             }
             .metric-card strong {
                 color: var(--ink);
@@ -609,6 +689,7 @@ def calculate_dashboard_values(measurement):
         "vo2": vo2,
         "hrr_ratio": hrr_ratio,
         "hr_max": hr_max,
+        "resting_hr": resting_hr,
         "kcal_from_vo2": kcal_from_vo2,
         "kcal": kcal,
         "risk": risk_result["risk"],
@@ -618,6 +699,7 @@ def calculate_dashboard_values(measurement):
         "limit_wbgt": risk_result["limit_wbgt"],
         "adjusted_wbgt": risk_result["adjusted_wbgt"],
         "margin": risk_result["margin"],
+        "risk_position": risk_scale_position(risk_result["margin"]),
         "acclimatization": acclimatization,
         "guidance": guidance,
         "manager_alert": should_trigger_alert(risk_result["risk"]),
@@ -644,6 +726,8 @@ def render_dashboard():
         )
 
         guidance = values["guidance"]
+        heart_reference = f"안정 기준 {values['resting_hr']}"
+        wbgt_reference = f"기준 {values['limit_wbgt']:.1f}℃"
         st.markdown(
             f"""
             <section class="risk-panel risk-{escape(guidance["tone"])}" data-testid="risk-panel">
@@ -651,12 +735,13 @@ def render_dashboard():
                 <div class="risk-title">
                     <h2>{escape(values["risk"])}</h2>
                 </div>
+                {risk_scale(values["risk_position"])}
                 <p class="action-heading">권장 대처</p>
                 {action_checklist(guidance["action_items"])}
             </section>
             <section class="metric-grid" data-testid="primary-metrics">
-                {metric_card("현재 심박수", values["heart_rate"], "bpm", "heart")}
-                {metric_card("온열지수 (WBGT)", f"{values["wbgt"]:.1f}", "WBGT", "wbgt")}
+                {metric_card("현재 심박수", values["heart_rate"], "bpm", "heart", heart_reference)}
+                {metric_card("온열지수 (WBGT)", f"{values["wbgt"]:.1f}", "WBGT", "wbgt", wbgt_reference)}
                 {metric_card("작업강도", values["workload"], "대사율 기준", "workload")}
             </section>
             {detail_disclosure(values)}
@@ -673,16 +758,11 @@ def render_input_page():
     worker_status_options = list(WORKER_STATUS_LABELS)
 
     st.markdown(
-        f"""
+        """
         <header class="page-head">
-            <p>PC 입력</p>
             <h1>측정값 전송</h1>
             <span>심박수, WBGT, 프로필을 저장하면 휴대폰 대시보드 탭이 약 2초마다 다시 읽습니다.</span>
         </header>
-        <section class="feed-status" data-testid="input-status">
-            <strong>최근 저장</strong>
-            <span>{format_updated_at(current.get("updated_at"))}</span>
-        </section>
         """,
         unsafe_allow_html=True,
     )
