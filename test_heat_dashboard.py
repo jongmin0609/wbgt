@@ -99,7 +99,7 @@ class HeatRiskTests(unittest.TestCase):
 
 
 class GuidanceTests(unittest.TestCase):
-    def test_every_risk_label_has_rest_action_and_tone(self):
+    def test_every_risk_label_has_rest_action_water_control_and_tone(self):
         for risk in ("안전", "주의", "위험", "매우 위험", "즉시 작업중지"):
             with self.subTest(risk=risk):
                 guidance = get_risk_guidance(risk)
@@ -107,7 +107,23 @@ class GuidanceTests(unittest.TestCase):
                 self.assertEqual(guidance, RISK_GUIDANCE[risk])
                 self.assertTrue(guidance["rest_time"])
                 self.assertTrue(guidance["action_text"])
+                self.assertTrue(guidance["water_text"])
+                self.assertTrue(guidance["control_text"])
                 self.assertTrue(guidance["tone"])
+
+    def test_guidance_adds_context_from_margin_workload_acclimatization_and_limit(self):
+        guidance = get_risk_guidance(
+            risk="위험",
+            margin=-1.5,
+            workload="고강도",
+            acclimatized=False,
+            limit_type="RAL",
+        )
+
+        self.assertIn("기준 WBGT를 1.5℃ 초과", guidance["action_text"])
+        self.assertIn("고강도 작업", guidance["action_text"])
+        self.assertIn("비순화 작업자", guidance["action_text"])
+        self.assertIn("NIOSH RAL", guidance["action_text"])
 
     def test_unknown_risk_label_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "알 수 없는"):

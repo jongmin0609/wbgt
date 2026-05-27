@@ -467,8 +467,13 @@ def calculate_dashboard_values(measurement):
         acclimatized=acclimatization["acclimatized"],
         clothing_adjustment=clothing_adjustment,
     )
-    guidance = get_risk_guidance(risk_result["risk"])
-
+    guidance = get_risk_guidance(
+        risk=risk_result["risk"],
+        margin=risk_result.get("margin"),
+        workload=risk_result.get("workload"),
+        acclimatized=acclimatization.get("acclimatized"),
+        limit_type=risk_result.get("limit_type"),
+    )
     return {
         "heart_rate": heart_rate,
         "wbgt": wbgt,
@@ -535,6 +540,8 @@ def render_dashboard():
 
         guidance = values["guidance"]
         acclimatization = values["acclimatization"]
+        alert_message = "관리자 확인 필요" if values["manager_alert"] else "일반 모니터링"
+
         st.markdown(
             f"""
             <section class="feed-status" data-testid="feed-status">
@@ -560,6 +567,10 @@ def render_dashboard():
                 {metric_card("권장 휴식 시간", guidance["rest_time"], "참고 권고")}
             </section>
             <section class="detail-grid" data-testid="calculation-details">
+                <article class="detail-card">
+                    <p>알림 상태</p>
+                    <strong>{escape(alert_message)}</strong>
+                </article>
                 <article class="detail-card">
                     <p>작업강도</p>
                     <strong>{escape(values["workload"])}</strong>
@@ -599,6 +610,22 @@ def render_dashboard():
                 <article class="detail-card">
                     <p>적용 조건</p>
                     <strong>{escape(acclimatization["status_label"])} / 보정 WBGT {values["adjusted_wbgt"]:.1f}℃</strong>
+                </article>
+                <article class="detail-card">
+                    <p>권장 휴식</p>
+                    <strong>{escape(guidance["rest_time"])}</strong>
+                </article>
+                <article class="detail-card">
+                    <p>권장 행동</p>
+                    <strong>{escape(guidance["action_text"])}</strong>
+                </article>
+                <article class="detail-card">
+                    <p>수분 섭취 권고</p>
+                    <strong>{escape(guidance["water_text"])}</strong>
+                </article>
+                <article class="detail-card">
+                    <p>관리 조치</p>
+                    <strong>{escape(guidance["control_text"])}</strong>
                 </article>
             </section>
             <aside class="notice">

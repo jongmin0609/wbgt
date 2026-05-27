@@ -1,44 +1,111 @@
 RISK_GUIDANCE = {
     "안전": {
         "rest_time": "정기 휴식 유지",
-        "action_text": "시원한 물을 가까이 두고 작업 중 상태 변화를 계속 확인하세요.",
+        "action_text": (
+            "현재 조건은 기준값보다 여유가 있습니다. "
+            "작업을 지속하되 시원한 물을 가까이 두고 심박수, 어지러움, 두통, 과도한 발한 같은 변화를 관찰하세요."
+        ),
+        "water_text": "갈증이 나기 전부터 소량씩 자주 섭취",
+        "control_text": "일반 모니터링 유지",
         "tone": "safe",
     },
     "주의": {
-        "rest_time": "매시간 10분 참고",
-        "action_text": "짧고 자주 쉬며 심박수 상승이나 어지러움 같은 변화를 살피세요.",
+        "rest_time": "매시간 10분 이상 휴식 검토",
+        "action_text": (
+            "WBGT가 기준값에 근접했습니다. "
+            "그늘 또는 시원한 장소에서 짧고 자주 쉬게 하고, 작업 속도와 작업강도를 낮추세요."
+        ),
+        "water_text": "15~20분마다 물 섭취 권고",
+        "control_text": "작업자 상태 확인, 그늘 휴식 준비",
         "tone": "caution",
     },
     "위험": {
-        "rest_time": "매시간 15분 참고",
-        "action_text": "그늘 휴식을 확보하고 작업 속도와 강도를 낮추세요.",
+        "rest_time": "매시간 15분 이상 휴식 권고",
+        "action_text": (
+            "기준값을 초과한 상태입니다. "
+            "그늘 휴식, 작업강도 저감, 인원 교대, 무더위 시간대 작업 조정을 시행하세요."
+        ),
+        "water_text": "15~20분마다 물 섭취, 장시간 발한 시 전해질 보충 검토",
+        "control_text": "작업-휴식 주기 조정 및 관리자 확인",
         "tone": "danger",
     },
     "매우 위험": {
-        "rest_time": "매시간 15분 이상",
-        "action_text": "충분히 쉬도록 배치하고 무더위 시간대 작업을 최소화하세요.",
+        "rest_time": "작업시간 단축 및 휴식 대폭 증가",
+        "action_text": (
+            "기준값을 크게 초과했습니다. "
+            "고강도 작업은 중단하거나 연기하고, 가능한 경우 냉방·그늘 휴식 후 재평가하세요."
+        ),
+        "water_text": "수분·전해질 보충, 동료 간 이상 증상 확인",
+        "control_text": "작업 재배치, 기계화 보조, 작업시간 변경",
         "tone": "severe",
     },
     "즉시 작업중지": {
         "rest_time": "즉시 작업 중지",
-        "action_text": "작업을 멈추고 시원한 장소로 이동해 상태를 확인하세요.",
+        "action_text": (
+            "작업을 즉시 멈추고 작업자를 시원한 장소로 이동시키세요. "
+            "혼란, 실신, 구토, 의식 저하, 체온 이상 등 열질환 의심 증상이 있으면 즉시 응급조치를 요청하세요."
+        ),
+        "water_text": "의식이 명확한 경우에만 수분 섭취",
+        "control_text": "작업 재개 전 조건 재평가 필수",
         "tone": "stop",
     },
 }
 
+
 ALERT_RISK_LEVELS = {"위험", "매우 위험", "즉시 작업중지"}
 
 
-def get_risk_guidance(risk):
-    """Return dashboard guidance for a calculated heat-risk label."""
-    try:
-        return RISK_GUIDANCE[risk].copy()
-    except KeyError as error:
-        raise ValueError(f"알 수 없는 위험도 단계입니다: {risk}") from error
+def get_risk_guidance(
+    risk,
+    margin=None,
+    workload=None,
+    acclimatized=None,
+    limit_type=None,
+):
+    """
+    위험도에 따른 권장 행동 양식을 반환합니다.
+
+    반영 요소:
+    - 위험도 단계
+    - 기준 WBGT와 실제 WBGT의 차이
+    - 작업강도
+    - 순화 여부
+    - 적용 기준 종류
+    """
+
+    if risk not in RISK_GUIDANCE:
+        raise ValueError(f"알 수 없는 위험도 단계입니다: {risk}")
+
+    guidance = RISK_GUIDANCE[risk].copy()
+    extra_notes = []
+
+    if margin is not None:
+        if margin >= 0:
+            extra_notes.append(f"기준 WBGT까지 여유 {margin:.1f}℃")
+        else:
+            extra_notes.append(f"기준 WBGT를 {abs(margin):.1f}℃ 초과")
+
+    if workload in ("고강도", "매우 고강도") and risk != "안전":
+        extra_notes.append("고강도 작업이므로 작업 속도 저감, 인원 교대, 기계화 보조를 우선 검토")
+
+    if acclimatized is False and risk in ("주의", "위험", "매우 위험"):
+        extra_notes.append("비순화 작업자이므로 더 긴 휴식과 단계적 노출 적용")
+
+    if limit_type:
+        extra_notes.append(f"적용 기준: NIOSH {limit_type}")
+
+    if extra_notes:
+        guidance["action_text"] = guidance["action_text"] + " " + " / ".join(extra_notes)
+
+    return guidance
 
 
 def should_trigger_alert(risk):
-    """Return whether the dashboard should show a manager alert."""
+    """
+    관리자 경고 알림이 필요한 위험도인지 판단합니다.
+    """
+
     if risk not in RISK_GUIDANCE:
         raise ValueError(f"알 수 없는 위험도 단계입니다: {risk}")
+
     return risk in ALERT_RISK_LEVELS

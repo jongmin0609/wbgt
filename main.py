@@ -571,7 +571,13 @@ def render_live_dashboard():
         adjusted_wbgt = risk_result["adjusted_wbgt"]
         margin = risk_result["margin"]
 
-        guidance = get_risk_guidance(risk)
+        guidance = get_risk_guidance(
+            risk=risk,
+            margin=margin,
+            workload=workload,
+            acclimatized=acclimatization["acclimatized"],
+            limit_type=limit_type,
+        )
         manager_alert = should_trigger_alert(risk)
 
     except ValueError as error:
@@ -659,6 +665,14 @@ def render_live_dashboard():
             <article class="detail-card">
                 <p>적용 조건</p>
                 <strong>{escape(acclimatization["status_label"])} / 보정 WBGT {adjusted_wbgt:.1f}℃</strong>
+            </article>
+            <article class="detail-card">
+                <p>수분 섭취 권고</p>
+                <strong>{escape(guidance["water_text"])}</strong>
+            </article>
+            <article class="detail-card">
+                <p>관리 조치</p>
+                <strong>{escape(guidance["control_text"])}</strong>
             </article>
         </section>
         <aside class="notice">
