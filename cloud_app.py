@@ -51,7 +51,7 @@ def metric_card(label, value, unit, tone="neutral", reference=None):
 
 
 def risk_score_from_margin(margin):
-    return max(0, min(100, ((4.0 - margin) / 10.0) * 100))
+    return max(0, min(100, ((4.0 - margin) / 8.0) * 100))
 
 
 def format_margin(margin):
@@ -67,7 +67,7 @@ def risk_scale(position):
         "</div>"
         '<div class="risk-scale-labels">'
         "<span><b>기준 여유 +4℃ 이상</b><small>위험 낮음</small></span>"
-        "<span><b>기준 여유 -6℃ 이하</b><small>위험 높음</small></span>"
+        "<span><b>기준 여유 -4℃ 이하</b><small>위험 높음</small></span>"
         "</div>"
         "</div>"
     )
@@ -307,12 +307,12 @@ def apply_styles():
                 background: linear-gradient(
                     90deg,
                     var(--safe) 0%,
-                    var(--safe) 20%,
-                    var(--caution) 20%,
-                    var(--caution) 40%,
-                    var(--warning) 40%,
-                    var(--warning) 60%,
-                    var(--danger) 60%,
+                    var(--safe) 25%,
+                    var(--caution) 25%,
+                    var(--caution) 50%,
+                    var(--warning) 50%,
+                    var(--warning) 75%,
+                    var(--danger) 75%,
                     var(--danger) 100%
                 );
                 border-radius: 999px;
